@@ -33,20 +33,12 @@ requires-python = ">=3.10"
 
 [project.optional-dependencies]
 meme  = [
-    "meme @ git+https://github.com/slaclab/meme.git" # note: direct dependency will block PyPI upload
-]
-meme-ssh  = [
-    "meme @ git+ssh://git@github.com/slaclab/meme.git"
+    "meme @ git+https://github.com/slaclab/meme.git@main" # note: direct dependency will block PyPI upload
 ]
 edef  = [
-    "edef @ git+https://github.com/slaclab/edef.git"
+    "edef @ git+https://github.com/slaclab/edef.git@main"
 ]
-edef-ssh  = [
-    "edef @ git+ssh://git@github.com/slaclab/edef.git"
-]
-slac-devices-ssh  = [
-    "slac-devices @ git+ssh://git@github.com/slaclab/slac-devices.git@main"
-]
+
 
 [options]
 include_package_data = true
