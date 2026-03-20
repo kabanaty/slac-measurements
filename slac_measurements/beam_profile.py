@@ -1,8 +1,8 @@
 from abc import abstractmethod
-from typing import Any
+from typing import Any, Dict
 
 from slac_devices.device import Device
-from slac_measurements.measurement import Measurement
+from slac_measurements import Measurement
 from pydantic import (
     ConfigDict,
     SerializeAsAny,
@@ -10,10 +10,10 @@ from pydantic import (
 from typing import Optional
 
 from slac_measurements.utils import NDArrayAnnotatedType
-import slac_measurements
+import lcls_tools
 
 
-class BeamProfileMeasurementResult(slac_measurements.BaseModel):
+class BeamProfileMeasurementResult(lcls_tools.common.BaseModel):
     """
     Class that contains the results of a beam profile measurement
     (for any set of axes)
@@ -40,6 +40,23 @@ class BeamProfileMeasurementResult(slac_measurements.BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class BeamProfileCollectionResult(BeamProfileMeasurementResult):
+    """
+    Class that contains the results of a beam profile measurement
+    collection (for any set of axes)
+
+    Attributes
+    ----------
+    raw_data : Dict[str, Any]
+        Dictionary of device data as np.ndarrays.
+        Keys are device names.
+
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    raw_data: Dict[str, Any]
+
+
 class BeamProfileMeasurement(Measurement):
     """
     Class that allows for beam profile measurements and fitting
@@ -61,5 +78,39 @@ class BeamProfileMeasurement(Measurement):
     def measure(self) -> BeamProfileMeasurementResult:
         """
         Measure the beam profile and return a BeamProfileMeasurementResult
+        """
+        pass
+
+
+class BeamProfileAnalysis(lcls_tools.common.BaseModel):
+    """
+    Abstract base class for post-processing analysis of beam profile measurements.
+
+    Subclasses implement device-specific curve fitting, RMS size extraction,
+    and other analysis operations on measurement results.
+
+    Attributes
+    ----------
+    measurement_result : BeamProfileCollectionResult
+        Raw measurement data to be analyzed.
+
+    Methods
+    -------
+    analyze()
+        Abstract method that subclasses must implement to perform analysis.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    collection_result: BeamProfileCollectionResult
+
+    @abstractmethod
+    def analyze(self) -> Dict[str, Any]:
+        """
+        Perform analysis on the measurement result.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Analysis results. Structure depends on specific analyzer implementation.
         """
         pass
