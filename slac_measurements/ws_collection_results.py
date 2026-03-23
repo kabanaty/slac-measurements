@@ -40,6 +40,19 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
     raw_data: Dict[str, Any]
     metadata: MeasurementMetadata
 
+    def __repr__(self) -> str:
+        """Return a string representation of the WireMeasurementCollectionResult."""
+        meta = self.metadata
+        num_devices = len(self.raw_data)
+        return (
+            f"WireMeasurementCollectionResult("
+            f"wire_name='{meta.wire_name}', "
+            f"area='{meta.area}', "
+            f"beampath='{meta.beampath}', "
+            f"devices={num_devices}, "
+            f"timestamp={meta.timestamp.isoformat()})"
+        )
+
     def save_to_h5(self, filepath: str) -> None:
         """
         Save wire beam profile collection results to an HDF5 file.

@@ -107,7 +107,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
 
         # Turn off motor after scan only if retract was successful
         if self.my_wire.motor_rbv < 500:
-            self.my_wire.torque_enable = 0
+            self.my_wire.torque_enable = False
 
         return WireMeasurementCollectionResult(
             raw_data=self.data,
@@ -375,7 +375,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             positions = []
             for profile in self.my_wire.active_profiles():
                 for mode in ["inner", "outer"]:
-                    attr_name = f"{profile.lower()}_wire_{mode}"
+                    attr_name = f"{profile}_wire_{mode}"
                     positions.append(getattr(self.my_wire, attr_name))
             return sorted(positions)
 
