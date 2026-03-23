@@ -21,6 +21,11 @@ from slac_measurements.ws_collection_results import (
     WireMeasurementCollectionResult,
 )
 
+_DATE = datetime.now().strftime("%Y%m%d")
+_LOG_FILENAME = f"ws_log_{_DATE}.txt"
+_LOGGER_NAME = "wire_scan_logger"
+_WIRE_LBLMS_LOCATION = Path(__file__).resolve().parent.parent / "devices" / "yaml" / "wire_lblms.yaml"
+
 
 class WireMeasurementCollection(BeamProfileMeasurement):
     """
@@ -97,6 +102,26 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         """
         Make additional metadata.
         """
+        def _load_yaml_config() -> Optional[dict]:
+            file_to_open = _WIRE_LBLMS_LOCATION
+
+            if file_to_open.exists() is False:
+                msg = f"YAML config file {file_to_open} not found."
+                self.logger.error(msg)
+                return None
+
+            with open(file_to_open, "r") as f:
+                wire_lblms = yaml.safe_load(f)
+                return wire_lblms
+
+        def _get_default_detector() -> str:
+            lblm_config = _load_yaml_config()
+            if lblm_config is None:
+                return self.detectors[0]
+            else:
+                default_detector = lblm_config[self.my_wire.name]
+                return default_detector
+
         scan_ranges = {
             "x": self.my_wire.x_range,
             "y": self.my_wire.y_range,
@@ -109,10 +134,10 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             area=self.my_wire.area,
             beampath=self.beampath,
             detectors=self.detectors,
-            default_detector=self._get_default_detector(),
+            default_detector=_get_default_detector(),
             scan_ranges=scan_ranges,
             timestamp=datetime.now(),
-            active_profiles=self._active_profiles(),
+            active_profiles=self.my_wire.active_profiles(),
             install_angle=self.my_wire.install_angle,
             notes=None,
         )
@@ -162,8 +187,7 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             )
 
         # Reserve a new buffer if necessary
-        if self.my_buffer is None:
-            self.my_buffer = self._reserve_buffer()
+        self.my_buffer = self._reserve_buffer()
 
         # Create measurement metadata object
         metadata = self.create_metadata()
@@ -195,7 +219,12 @@ class WireMeasurementCollection(BeamProfileMeasurement):
 
     @model_validator(mode="after")
     def run_setup(self) -> Self:
-        self.logger = self._logger_config()
+        # Configure  logger
+        self.logger = custom_logger(
+            log_file=_LOG_FILENAME,
+            name=_LOGGER_NAME,
+        )
+        self.logger.propagate = False
 
         # Reserve BSA buffer
         self.my_buffer = self._reserve_buffer()
@@ -224,8 +253,7 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             historic default.
         """
         # Reserve a new buffer if necessary
-        if self.my_buffer is None:
-            self.my_buffer = self._reserve_buffer()
+        self.my_buffer = self._reserve_buffer()
 
         if scan_type == "on_the_fly":
             self._initialize_wire_with_retry(wire_action="start_scan")
@@ -360,14 +388,6 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         else:
             return None
 
-    def _get_default_detector(self) -> str:
-        lblm_config = self._load_yaml_config()
-        if lblm_config is None:
-            return self.detectors[0]
-        else:
-            default_detector = lblm_config[self.my_wire.name]
-            return default_detector
-
     def _get_step_positions(self) -> list:
         """Return sorted inner/outer positions for active profiles."""
         positions = []
@@ -455,34 +475,7 @@ class WireMeasurementCollection(BeamProfileMeasurement):
 
         return device
 
-    def _load_yaml_config(self) -> Optional[dict]:
-        file_to_open = (
-            Path(__file__).resolve().parent.parent
-            / "devices"
-            / "yaml"
-            / "wire_lblms.yaml"
-        )
-
-        if file_to_open.exists() is False:
-            msg = f"YAML config file {file_to_open} not found."
-            self.logger.error(msg)
-            return None
-
-        with open(file_to_open, "r") as f:
-            wire_lblms = yaml.safe_load(f)
-            return wire_lblms
-
-    def _logger_config(self) -> logging.Logger:
-        # Configure custom logger
-        date_str = datetime.now().strftime("%Y%m%d")
-        log_filename = f"ws_log_{date_str}.txt"
-        logger = custom_logger(
-            log_file=log_filename,
-            name="wire_scan_logger",
-        )
-        logger.propagate = False
-
-        return logger
+    
 
     def _move_to_step_position(
         self, position: int, position_index: int, total_positions: int
@@ -533,13 +526,14 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             time.sleep(0.1)
 
     def _reserve_buffer(self) -> object:
-        return reserve_buffer(
-            beampath=self.beampath,
-            name="LCLS Tools Wire Scan",
-            n_measurements=self._calc_buffer_points(),
-            destination_mode="Inclusion",
-            logger=self.logger,
-        )
+        if self.my_buffer is None:
+            return reserve_buffer(
+                beampath=self.beampath,
+                name="LCLS Tools Wire Scan",
+                n_measurements=self._calc_buffer_points(),
+                destination_mode="Inclusion",
+                logger=self.logger,
+            )
 
     def _wait_until(self, condition, timeout=5, period=0.1) -> bool:
         # Returns True if condition met within timeout
