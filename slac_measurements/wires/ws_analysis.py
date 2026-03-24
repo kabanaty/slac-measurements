@@ -1,6 +1,7 @@
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 import warnings
+from typing import Literal
 
 import slac_measurements.beam_profile
 from slac_measurements.wires.ws_analysis_results import (
@@ -14,7 +15,7 @@ from slac_measurements.wires.ws_analysis_results import (
 
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
-    Analyzes wire scan data: organizes by profile, fits Gaussian curves,
+    Analyzes wire scan data: organizes by profile, fits beam profile curves,
     extracts beam parameters.
 
     Takes raw wire measurement data and performs curve fitting to extract
@@ -22,13 +23,24 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
     Attributes:
         collection_result: Raw measurement data from wire scan.
+        fitting_method: Fitting method to use for profile analysis.
+                       Options: 'gaussian', 'asymmetric_gaussian', 'super_gaussian'.
+                       Default: 'gaussian'.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    fitting_method: Literal["gaussian", "asymmetric_gaussian", "super_gaussian"] = Field(
+        default="gaussian",
+        description="Fitting method to use for beam profile analysis"
+    )
 
     def analyze(self) -> WireMeasurementAnalysisResult:
         """
-        Organize data by profile, fit Gaussian curves, extract RMS sizes.
+        Organize data by profile, fit beam profile curves, extract RMS sizes.
+
+        Uses the configured fitting method (set via fitting_method parameter)
+        to fit each detector's data. Available methods: 'gaussian',
+        'asymmetric_gaussian', 'super_gaussian'.
 
         Returns
         -------
@@ -50,13 +62,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             profiles=profile_measurements,
         )
 
-    def _convert_stage_to_beam_coords(
-        self, profile: str, positions: np.ndarray
-    ) -> np.ndarray:
-        """Convert stage positions to beam coordinates for a given profile."""
-        scale = self._extract_wire_angle()
-        return positions * abs(scale[profile])
-
     def _create_detector_measurement(
         self, device_name: str, data_slice: np.ndarray
     ) -> DetectorProfileMeasurement:
@@ -74,17 +79,11 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             values=data_slice, units=_get_units_for_device(device_name), label=device_name
         )
 
-    def _extract_wire_angle(self) -> dict:
-        """
-        Extract the wire install angle (in radians) for coordinate conversion.
-        """
-        rad = np.deg2rad(self.collection_result.metadata.install_angle)
-        return {"x": np.sin(rad), "y": np.cos(rad), "u": 1.0}
-
     def _fit_data_by_profile(self, profile_measurements) -> dict:
         """
-        Fit detector data for each profile and device using Gaussian curves.
-        Applies beam fitting to x, y, and u projections for all detectors
+        Fit detector data for each profile and device using the configured fitting method.
+
+        Applies curve fitting to x, y, and u projections for all detectors
         in the measurement result.
 
         Returns:
@@ -113,9 +112,21 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         Returns:
             FitResult: Fit results for all detectors in the profile.
         """
+        def _convert_stage_to_beam_coords(profile: str, positions: np.ndarray) -> np.ndarray:
+            """Convert stage positions to beam coordinates for a given profile."""
+            scale = _extract_wire_angle()
+            return positions * abs(scale[profile])
+
+        def _extract_wire_angle() -> dict:
+            """
+            Extract the wire install angle (in radians) for coordinate conversion.
+            """
+            rad = np.deg2rad(self.collection_result.metadata.install_angle)
+            return {"x": np.sin(rad), "y": np.cos(rad), "u": 1.0}
+
         def _fit_detector_in_profile(x_beam: np.ndarray, detector_signal: np.ndarray, profile: str) -> DetectorFit:
             """
-            Fit a single detector signal within a profile using Gaussian curve.
+            Fit a single detector signal within a profile using the configured fitting method.
 
             Parameters:
                 x_beam (np.ndarray): Position data in beam coordinates.
@@ -125,25 +136,42 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             Returns:
                 DetectorFit: Fit parameters (mean in stage coords, others in beam coords) and curve.
             """
-            import slac_measurements.fitting.gaussian as gaussian
+            import importlib
+
+            # Dynamically import the fitting module based on fitting_method
+            fitting_module = importlib.import_module(
+                f"slac_measurements.fitting.{self.fitting_method}"
+            )
 
             peak_window = _peak_window(x=x_beam, y=detector_signal)
 
-            # Get fit parameters
-            fp = gaussian.fit(pos=peak_window[0], data=peak_window[1])
+            # Get fit parameters - use_prior parameter only exists for asymmetric_gaussian
+            if self.fitting_method == "asymmetric_gaussian":
+                fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1], use_prior=False)
+            else:
+                fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1])
 
             # Convert mean from beam coordinates back to stage coordinates
-            scale = self._extract_wire_angle()
+            scale = _extract_wire_angle()
             mean_stage = fp["mean"] / abs(scale[profile])
 
             # Generate fit curve (in beam coordinates)
-            fit_curve = gaussian.curve(
-                x=peak_window[0],
-                mean=fp["mean"],
-                sigma=fp["sigma"],
-                amp=fp["amp"],
-                off=fp["off"],
-            )
+            # Build kwargs dynamically to handle different fit types
+            curve_kwargs = {
+                "x": peak_window[0],
+                "mean": fp["mean"],
+                "sigma": fp["sigma"],
+                "amp": fp["amp"],
+                "off": fp["off"],
+            }
+            
+            # Add method-specific parameters
+            if self.fitting_method == "asymmetric_gaussian" and "skew" in fp:
+                curve_kwargs["skew"] = fp["skew"]
+            elif self.fitting_method == "super_gaussian" and "n" in fp:
+                curve_kwargs["n"] = fp["n"]
+            
+            fit_curve = fitting_module.curve(**curve_kwargs)
 
             return DetectorFit(
                 mean=mean_stage,
@@ -217,7 +245,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         profile_data = profile_measurements[profile]
         x_stage = profile_data.positions
-        x_beam = self._convert_stage_to_beam_coords(profile, x_stage)
+        x_beam = _convert_stage_to_beam_coords(profile, x_stage)
 
         detector_fits = {}
         for detector_name in detectors:
