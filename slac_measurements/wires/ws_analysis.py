@@ -13,6 +13,9 @@ from slac_measurements.wires.ws_analysis_results import (
 )
 
 
+_MIN_POS_FUDGE = 1.001  # 0.1% fudge factor to ensure we capture all relevant data points in profile range
+
+
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
     Analyzes wire scan data: organizes by profile, fits beam profile curves,
@@ -161,13 +164,13 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 "amp": fp["amp"],
                 "off": fp["off"],
             }
-            
+
             # Add method-specific parameters
             if self.fitting_method == "asymmetric_gaussian" and "skew" in fp:
                 curve_kwargs["skew"] = fp["skew"]
             elif self.fitting_method == "super_gaussian" and "n" in fp:
                 curve_kwargs["n"] = fp["n"]
-            
+
             fit_curve = fitting_module.curve(**curve_kwargs)
 
             return DetectorFit(
@@ -290,7 +293,10 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         """
         def _get_indices_in_range(position_data: np.ndarray, min_pos: float, max_pos: float) -> np.ndarray:
             """Return indices of position data within a given range."""
-            return np.where((position_data >= min_pos) & (position_data <= max_pos))[0]
+            # When setting motor positions, encoder can wobble at inner range
+            # bound, so we apply a small fudge factor to ensure we capture all relevant data points
+            x = (min_pos * _MIN_POS_FUDGE)
+            return np.where((position_data >= x) & (position_data <= max_pos))[0]
 
         def _validate_position_data(position_data: np.ndarray) -> None:
             """
