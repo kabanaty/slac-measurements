@@ -1,5 +1,5 @@
 import numpy as np
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict
 import warnings
 from typing import Literal
 
@@ -29,10 +29,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    fitting_method: Literal["gaussian", "asymmetric_gaussian", "super_gaussian"] = Field(
-        default="gaussian",
-        description="Fitting method to use for beam profile analysis"
-    )
+    fitting_method: Literal["gaussian", "asymmetric_gaussian", "super_gaussian"] = "gaussian"
 
     def analyze(self) -> WireMeasurementAnalysisResult:
         """
