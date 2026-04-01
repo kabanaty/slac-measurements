@@ -377,12 +377,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             )
 
         profile_measurements = {}
-        devices = self.collection_result.metadata.detectors
-        devices.append(self.collection_result.metadata.wire_name)
+        devices = [
+            *self.collection_result.metadata.detectors,
+            self.collection_result.metadata.wire_name,
+        ]
         for profile, index in profile_indices.items():
             detectors = {}
             positions = None
-            for d_n in self.collection_result.metadata.detectors:
+            for d_n in devices:
                 if d_n not in self.collection_result.raw_data:
                     continue
                 data_slice = self.collection_result.raw_data[d_n][index]
