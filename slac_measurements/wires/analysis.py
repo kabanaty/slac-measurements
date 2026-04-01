@@ -1,10 +1,13 @@
+import importlib
 import numpy as np
 from pydantic import ConfigDict
+from scipy.ndimage import median_filter
+from skimage.filters import threshold_triangle
 import warnings
 from typing import Literal
 
 import slac_measurements.beam_profile
-from slac_measurements.wires.ws_analysis_results import (
+from slac_measurements.wires.analysis_results import (
     DetectorFit,
     DetectorProfileMeasurement,
     FitResult,
@@ -136,8 +139,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             Returns:
                 DetectorFit: Fit parameters (mean in stage coords, others in beam coords) and curve.
             """
-            import importlib
-
             # Dynamically import the fitting module based on fitting_method
             fitting_module = importlib.import_module(
                 f"slac_measurements.fitting.{self.fitting_method}"
@@ -201,9 +202,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             Returns:
                 tuple: (windowed_x, windowed_y, (left_idx, right_idx))
             """
-            from scipy.ndimage import median_filter
-            from skimage.filters import threshold_triangle
-
             x = np.asarray(x)
             y = np.asarray(y)
 

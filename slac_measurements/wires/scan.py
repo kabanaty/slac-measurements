@@ -1,11 +1,11 @@
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
-from slac_measurements.wires.ws_collection import WireMeasurementCollection
-from slac_measurements.wires.ws_analysis import WireMeasurementAnalysis
-from slac_measurements.wires.ws_analysis_results import (
+from slac_measurements.wires.collection import WireMeasurementCollection
+from slac_measurements.wires.analysis import WireMeasurementAnalysis
+from slac_measurements.wires.analysis_results import (
     WireMeasurementAnalysisResult,
 )
-from slac_measurements.wires.ws_collection_results import (
+from slac_measurements.wires.collection_results import (
     WireMeasurementCollectionResult,
 )
 from typing import Literal, Optional
