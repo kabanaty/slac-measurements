@@ -10,6 +10,7 @@ from typing_extensions import Self
 
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
+import slac_measurements.wires.buffer
 import slac_measurements.utils
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
@@ -405,10 +406,8 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             time.sleep(0.1)
 
     def _reserve_buffer(self) -> object:
-        import slac_measurements.ws_buffer
-
         if self.my_buffer is None:
-            self.my_buffer = slac_measurements.ws_buffer.reserve_buffer(
+            self.my_buffer = slac_measurements.wires.buffer.reserve_buffer(
                 beampath=self.beampath,
                 logger=self.logger,
                 pulses=self.my_wire.scan_pulses,
