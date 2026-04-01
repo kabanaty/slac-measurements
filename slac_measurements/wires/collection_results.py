@@ -128,7 +128,7 @@ def load_from_h5(filepath: str) -> WireMeasurementCollectionResult:
 
     Returns
     -------
-    WireBeamProfileMeasurementResult
+    WireMeasurementCollectionResult
         The loaded measurement results.
 
     Raises
