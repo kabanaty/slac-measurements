@@ -244,30 +244,41 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         self, position_data: np.ndarray, indices: np.ndarray
     ) -> np.ndarray:
         """
-        Return indices of position data that form a continuous monotonically 
-        non-decreasing sequence, skipping any encoder wobble at the beginning.
-        
-        Finds the earliest point where monotonic behavior begins and continues
-        from there, allowing the encoder to settle before fitting begins.
+        Return indices for the longest continuous monotonically
+        non-decreasing segment.
+
+        The input indices are assumed to already be filtered to the requested
+        profile range. This method removes points that break monotonic
+        non-decreasing behavior by selecting the single longest contiguous run.
         """
         if len(indices) <= 1:
             return indices
 
         pos = position_data[indices]
 
-        # Find the first index where the sequence becomes monotonically non-decreasing
-        # by checking if from each starting point onward, all differences are >= 0
-        for start_idx in range(len(pos)):
-            if start_idx == len(pos) - 1:
-                # Last point, trivially monotonic with itself
-                return indices[start_idx:]
-            
-            # Check if from start_idx onward the sequence is monotonic
-            if np.all(np.diff(pos[start_idx:]) >= 0):
-                return indices[start_idx:]
+        best_start = 0
+        best_end = 1
+        run_start = 0
 
-        # Fallback (shouldn't reach here if logic is correct)
-        return indices
+        for i in range(1, len(pos)):
+            if pos[i] < pos[i - 1]:
+                run_end = i
+                if (run_end - run_start) >= (best_end - best_start):
+                    best_start = run_start
+                    best_end = run_end
+                run_start = i
+
+        run_end = len(pos)
+        if (run_end - run_start) >= (best_end - best_start):
+            best_start = run_start
+            best_end = run_end
+
+        # If the selected run starts immediately after a rollback, drop the
+        # first point (local trough) so the kept segment starts with forward motion.
+        if best_start > 0 and pos[best_start] < pos[best_start - 1] and (best_end - best_start) > 1:
+            best_start += 1
+
+        return indices[best_start:best_end]
 
     def _get_profile_range_indices(self) -> dict:
         """
