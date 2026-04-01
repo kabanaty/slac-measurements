@@ -1,6 +1,6 @@
 import edef
 import logging
-import os
+import getpass
 import numpy as np
 
 
@@ -13,6 +13,17 @@ class BufferError(Exception):
     pass
 
 
+def _get_username() -> str:
+    """Return the current username."""
+    user = getpass.getuser()
+    if user:
+        return user
+
+    raise BufferError(
+        "Could not determine current username for buffer reservation."
+    )
+
+
 def reserve_buffer(
     beampath: str,
     pulses: int,
@@ -21,7 +32,7 @@ def reserve_buffer(
     destination_mode: str = "Inclusion",
     logger: logging.Logger = None,
 ):
-    user = os.getlogin()
+    user = _get_username()
     if logger:
         logger.info("Reserving buffer...")
 
