@@ -1,4 +1,3 @@
-import edef
 import logging
 import getpass
 import numpy as np
@@ -106,6 +105,8 @@ def _reserve_bsa_buffer(
     destination_mode: str,
     logger: logging.Logger = None,
 ):
+    import edef
+
     if destination_mode not in ["Disable", "Exclusion", "Inclusion"]:
         raise BufferError(f"Invalid destination mode: {destination_mode}")
 
@@ -125,6 +126,8 @@ def _reserve_edef_buffer(
     n_measurements: int,
     logger: logging.Logger = None,
 ):
+    import edef
+
     buf = edef.EventDefinition(name=name, user=user)
     buf.n_measurements = n_measurements
     if logger:
