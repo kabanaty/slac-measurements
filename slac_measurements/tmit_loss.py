@@ -1,7 +1,6 @@
 from slac_devices.reader import create_bpm
 from slac_measurements.measurement import Measurement
 from slac_measurements.utils import collect_with_size_check
-import meme.names
 import pandas as pd
 from edef import BSABuffer
 from slac_devices.wire import Wire
@@ -77,6 +76,8 @@ class TMITLoss(Measurement):
                                 corresponding areas.
                 - list: A list of BPM device names.
         """
+        import meme.names
+
         # List of BPM MAD names based on beampath
         bpms_elements = meme.names.list_elements(
             "BPMS:%TMIT", tag=self.beampath, sort_by="z"
