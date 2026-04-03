@@ -50,6 +50,7 @@ def reserve_buffer(
             name=name,
             user=user,
             n_measurements=_calculate_buffer_points(pulses, beam_rate),
+            beampath=beampath,
             logger=logger,
         )
 
@@ -124,11 +125,16 @@ def _reserve_edef_buffer(
     name: str,
     user: str,
     n_measurements: int,
+    beampath: str,
     logger: logging.Logger = None,
 ):
     import edef
+    if beampath == "CU_HXR":
+        beamcode = 1
+    elif beampath == "CU_SXR":
+        beamcode = 2
 
-    buf = edef.EventDefinition(name=name, user=user)
+    buf = edef.EventDefinition(name=name, user=user, beamcode=beamcode)
     buf.n_measurements = n_measurements
     if logger:
         logger.info("Reserved eDef Buffer %s.", buf.number)
