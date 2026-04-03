@@ -35,6 +35,7 @@ class WireBeamProfileMeasurement(
         fitting_method: Literal[
             "gaussian", "asymmetric_gaussian", "super_gaussian"
         ] = "gaussian",
+        rms_detector: Optional[str] = None,
     ) -> WireMeasurementAnalysisResult:
         """
         Instantiate a WireMeasurementCollection, run the scan, analyze, and
@@ -48,6 +49,9 @@ class WireBeamProfileMeasurement(
             Fit model used by the downstream wire-scan analysis. Supported
             values are ``"gaussian"``, ``"asymmetric_gaussian"``, and
             ``"super_gaussian"``.
+        rms_detector : str, optional
+            Detector name to use when extracting RMS sizes. If omitted,
+            the collection metadata default detector is used.
 
         Returns
         -------
@@ -59,9 +63,16 @@ class WireBeamProfileMeasurement(
             beampath=self.beampath,
         )
         self.collection_result = collection.measure(scan_type=scan_type)
-        return self.analyze(fitting_method=fitting_method)
+        return self.analyze(
+            fitting_method=fitting_method,
+            rms_detector=rms_detector,
+        )
 
-    def analyze(self, fitting_method) -> WireMeasurementAnalysisResult:
+    def analyze(
+        self,
+        fitting_method,
+        rms_detector: Optional[str] = None,
+    ) -> WireMeasurementAnalysisResult:
         """
         Analyze the most recently collected wire-scan data.
 
@@ -70,6 +81,9 @@ class WireBeamProfileMeasurement(
         fitting_method : str, optional
             Fit model used by wire-scan analysis. If omitted, uses the
             instance default ``self.fitting_method``, Gaussian.
+        rms_detector : str, optional
+            Detector name to use when extracting RMS sizes. If omitted,
+            the collection metadata default detector is used.
 
         Returns
         -------
@@ -92,4 +106,4 @@ class WireBeamProfileMeasurement(
             collection_result=self.collection_result,
             fitting_method=fitting_method,
         )
-        return analysis.analyze()
+        return analysis.analyze(rms_detector=rms_detector)
