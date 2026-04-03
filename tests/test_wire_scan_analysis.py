@@ -9,6 +9,7 @@ from slac_measurements.wires.analysis_results import (
     DetectorProfileMeasurement,
     FitResult,
     ProfileMeasurement,
+    WireMeasurementAnalysisResult,
 )
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
@@ -442,3 +443,104 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         self.assertEqual(result.fit_result["x"].detectors["D1"].sigma, 1.0)
         np.testing.assert_array_equal(np.asarray(result.rms_sizes), np.array([1.0, 2.0]))
         self.assertEqual(set(result.profiles.keys()), {"x"})
+
+
+class TestWireMeasurementAnalysisResult(TestCase):
+    @staticmethod
+    def _make_result() -> WireMeasurementAnalysisResult:
+        metadata = MeasurementMetadata(
+            wire_name="WIRE",
+            area="TEST",
+            beampath="TEST",
+            detectors=["D1", "D2"],
+            default_detector="D1",
+            scan_ranges={"x": (0, 1), "y": (0, 1)},
+            timestamp=datetime.now(),
+            active_profiles=["x", "y"],
+            install_angle=45.0,
+        )
+        collection_result = WireMeasurementCollectionResult(
+            raw_data={"WIRE": np.array([0.0, 1.0])},
+            metadata=metadata,
+        )
+        fit_result = {
+            "x": FitResult(
+                detectors={
+                    "D1": DetectorFit(
+                        mean=0.0,
+                        sigma=1.25,
+                        amplitude=10.0,
+                        offset=0.0,
+                        curve=np.array([1.0, 2.0]),
+                        positions=np.array([0.0, 1.0]),
+                    ),
+                    "D2": DetectorFit(
+                        mean=0.0,
+                        sigma=3.5,
+                        amplitude=11.0,
+                        offset=0.0,
+                        curve=np.array([1.0, 2.0]),
+                        positions=np.array([0.0, 1.0]),
+                    ),
+                }
+            ),
+            "y": FitResult(
+                detectors={
+                    "D1": DetectorFit(
+                        mean=0.0,
+                        sigma=2.5,
+                        amplitude=8.0,
+                        offset=0.0,
+                        curve=np.array([1.0, 2.0]),
+                        positions=np.array([0.0, 1.0]),
+                    ),
+                    "D2": DetectorFit(
+                        mean=0.0,
+                        sigma=4.5,
+                        amplitude=9.0,
+                        offset=0.0,
+                        curve=np.array([1.0, 2.0]),
+                        positions=np.array([0.0, 1.0]),
+                    ),
+                }
+            ),
+        }
+
+        return WireMeasurementAnalysisResult(
+            fit_result=fit_result,
+            collection_result=collection_result,
+            profiles={},
+            rms_sizes=np.array([1.25, 2.5]),
+            metadata=metadata,
+        )
+
+    def test_set_rms_detector_updates_rms_sizes_and_metadata(self):
+        result = self._make_result()
+
+        result.set_rms_detector("D2")
+
+        np.testing.assert_array_equal(
+            np.asarray(result.rms_sizes),
+            np.array([3.5, 4.5], dtype=object),
+        )
+        self.assertEqual(result.metadata.rms_detector, "D2")
+        self.assertEqual(result.collection_result.metadata.rms_detector, "D2")
+
+    def test_set_rms_detector_uses_default_when_detector_omitted(self):
+        result = self._make_result()
+        result.metadata.rms_detector = "D2"
+        result.collection_result.metadata.rms_detector = "D2"
+
+        result.set_rms_detector()
+
+        np.testing.assert_array_equal(
+            np.asarray(result.rms_sizes),
+            np.array([1.25, 2.5], dtype=object),
+        )
+        self.assertEqual(result.metadata.rms_detector, "D1")
+
+    def test_set_rms_detector_raises_for_unknown_detector(self):
+        result = self._make_result()
+
+        with self.assertRaises(ValueError):
+            result.set_rms_detector("D3")
