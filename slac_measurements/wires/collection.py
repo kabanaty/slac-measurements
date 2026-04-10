@@ -295,7 +295,11 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         return data
 
     def _initialize_wire_with_retry(self, wire_action: str, max_attempts: int = 3) -> None:
-        """Call start_scan/initialize with retries until wire.enabled.
+        """Call start_scan/initialize with retries until wire is ready.
+
+        Readiness conditions:
+        - start_scan: wait for both my_wire.homed and my_wire.on_status.
+        - initialize: wait for my_wire.enabled.
 
         wire_action must be 'start_scan' or 'initialize'; raises on failure.
         """
@@ -304,9 +308,16 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
                 f"Unknown wire_action '{wire_action}'. Expected 'start_scan' or 'initialize'."
             )
 
-        # Skip initialization if wire is already enabled
-        if self.my_wire.enabled:
-            self.logger.info(f"{self.my_wire.name} is already enabled.")
+        if wire_action == "start_scan":
+            ready_check = lambda: self.my_wire.homed and self.my_wire.on_status
+            ready_desc = "homed and on"
+        else:
+            ready_check = lambda: self.my_wire.enabled
+            ready_desc = "enabled"
+
+        # Skip initialization if wire is already in the expected ready state
+        if ready_check():
+            self.logger.info(f"{self.my_wire.name} is already {ready_desc}.")
             return
 
         # Choose the appropriate method to call
@@ -327,8 +338,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             action_method()
 
             # If returns True within timeout, proceed
-            if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
-                self.logger.info(f"{self.my_wire.name} initialized.")
+            if slac_measurements.utils.wait_until(ready_check):
+                self.logger.info(
+                    "%s initialized (%s is True).", self.my_wire.name, ready_desc
+                )
                 return
 
             # After timeout, log and iterate through for loop again
