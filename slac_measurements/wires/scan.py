@@ -31,7 +31,7 @@ class WireBeamProfileMeasurement(
 
     def measure(
         self,
-        scan_type: str = "step",
+        scan_mode: str = "step",
         fitting_method: Literal[
             "gaussian", "asymmetric_gaussian", "super_gaussian"
         ] = "gaussian",
@@ -42,8 +42,8 @@ class WireBeamProfileMeasurement(
 
         Parameters
         ----------
-        scan_type : str
-            ``"on_the_fly"`` or ``"step"`` (default).
+        scan_mode : str
+            ``"otf"`` or ``"step"`` (default).
         fitting_method : str, optional
             Fit model used by the downstream wire-scan analysis. Supported
             values are ``"gaussian"``, ``"asymmetric_gaussian"``, and
@@ -58,7 +58,7 @@ class WireBeamProfileMeasurement(
             beam_profile_device=self.beam_profile_device,
             beampath=self.beampath,
         )
-        self.collection_result = collection.measure(scan_type=scan_type)
+        self.collection_result = collection.measure(scan_mode=scan_mode)
         return self.analyze(fitting_method=fitting_method)
 
     def analyze(self, fitting_method) -> WireMeasurementAnalysisResult:
