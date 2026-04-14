@@ -63,7 +63,10 @@ class WireBeamProfileMeasurement(
             beampath=self.beampath,
         )
         self.collection_result = collection.measure(scan_mode=scan_mode)
-        return self.analyze(fitting_method=fitting_method)
+        return self.analyze(
+            fitting_method=fitting_method,
+            rms_detector=rms_detector,
+        )
 
     def analyze(
         self,
