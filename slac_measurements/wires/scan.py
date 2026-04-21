@@ -1,6 +1,8 @@
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
-from slac_measurements.wires.collection import WireMeasurementCollection
+from slac_measurements.wires.collection import ScanMode, create_wire_collection
+from slac_measurements.wires.otf_collection import OTFWireMeasurementCollection
+from slac_measurements.wires.step_collection import StepWireMeasurementCollection
 from slac_measurements.wires.analysis import WireMeasurementAnalysis
 from slac_measurements.wires.analysis_results import (
     WireMeasurementAnalysisResult,
@@ -31,7 +33,7 @@ class WireBeamProfileMeasurement(
 
     def measure(
         self,
-        scan_mode: str = "step",
+        scan_mode: ScanMode = "step",
         fitting_method: Literal[
             "gaussian", "asymmetric_gaussian", "super_gaussian"
         ] = "gaussian",
@@ -43,7 +45,7 @@ class WireBeamProfileMeasurement(
 
         Parameters
         ----------
-        scan_mode : str
+        scan_mode : Literal["otf", "step"]
             ``"otf"`` or ``"step"`` (default).
         fitting_method : str, optional
             Fit model used by the downstream wire-scan analysis. Supported
@@ -58,11 +60,14 @@ class WireBeamProfileMeasurement(
         WireMeasurementAnalysisResult
             Fit results, RMS beam sizes, and organized profile data.
         """
-        collection = WireMeasurementCollection(
+        collection: (
+            StepWireMeasurementCollection | OTFWireMeasurementCollection
+        ) = create_wire_collection(
+            scan_mode=scan_mode,
             beam_profile_device=self.beam_profile_device,
             beampath=self.beampath,
         )
-        self.collection_result = collection.measure(scan_mode=scan_mode)
+        self.collection_result = collection.measure()
         return self.analyze(
             fitting_method=fitting_method,
             rms_detector=rms_detector,

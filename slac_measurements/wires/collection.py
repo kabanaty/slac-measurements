@@ -1,7 +1,7 @@
 import logging
-import time
+from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 from pydantic import model_validator
@@ -19,11 +19,13 @@ from slac_measurements.wires.collection_results import (
 _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
-_WIRE_TOLERANCE = 250  # microns
-_WIRE_RETRACT_WAIT = 2 # seconds
+ScanMode = Literal["step", "otf"]
 
 
-class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasurement):
+class BaseWireMeasurementCollection(
+    slac_measurements.beam_profile.BeamProfileMeasurement,
+    ABC,
+):
     """
     Collects wire scan measurement data via motor motion and BSA buffer.
 
@@ -57,24 +59,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
     def my_wire(self, value):
         self.beam_profile_device = value
 
-    def measure(self, scan_mode: str = "step") -> WireMeasurementCollectionResult:
+    def measure(self) -> WireMeasurementCollectionResult:
         """
-        Execute wire scan: move wire, acquire detector data from BSA buffer.
-
-        Two scan modes are supported:
-            - ``otf`` : On-the-fly scan using the wire's built-in start_scan command and
-              collect data while the wire moves continuously.
-            - ``step`` : perform a discrete (step) scan by moving the motor to each
-              inner/outer position in sequence with the buffer acquiring the whole
-              time.
-
-        The desired mode can be selected by passing ``scan_mode``.
-
-        Parameters
-        ----------
-        scan_mode : str, optional
-            ``"otf"`` or ``"step"``. Any other value will raise a
-            ``ValueError``.
+        Execute wire scan: run mode-specific wire motion and acquire detector
+        data from BSA buffer.
 
         Returns
         -------
@@ -83,31 +71,14 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             - raw_data: Buffered position and detector values by device name
             - metadata: Timestamp, wire name, area, beampath, and detector list
         """
-        if scan_mode not in ("otf", "step"):
-            raise ValueError(
-                f"Unknown scan_mode '{scan_mode}'. ``otf`` or ``step`` expected."
-            )
-
         self.my_buffer = self._reserve_buffer()
         metadata = self._create_metadata()
-        self._scan_with_wire(scan_mode=scan_mode)
 
-        # For on‑the‑fly scans we must start the timing buffer here; the step
-        # implementation already handles the buffer start and wait internally.
-        if scan_mode == "otf":
-            self._start_timing_buffer()
-
-        # Get position and detector data from the buffer
-        self.data = self._get_data_from_buffer()
-
-        # Release EDEF/BSA
-        self.logger.info("Releasing BSA buffer.")
-        self.my_buffer.release()
-        self.my_buffer = None
-
-        # Turn off motor after scan only if retract was successful
-        if self.my_wire.motor_rbv < 500:
-            self.my_wire.torque_enable = False
+        try:
+            self._run_collection_scan()
+            self.data = self._get_data_from_buffer()
+        finally:
+            self._release_buffer_and_disable_torque_safely()
 
         return WireMeasurementCollectionResult(
             raw_data=self.data,
@@ -133,6 +104,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         # Generate dictionary of all required lcls-tools device objects
         self.devices = self._create_device_dictionary()
         return self
+
+    @abstractmethod
+    def _run_collection_scan(self) -> None:
+        """Run mode-specific wire motion and buffer timing behavior."""
 
     def _create_device_dictionary(self) -> dict:
         # TODO: Move to its own module
@@ -278,7 +253,11 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
-    def _initialize_wire_with_retry(self, scan_mode: str, max_attempts: int = 3) -> None:
+    def _initialize_wire_with_retry(
+        self,
+        scan_mode: ScanMode,
+        max_attempts: int = 3,
+    ) -> None:
         """Initialize wire motion with retries until wire is ready for scan mode.
 
         Readiness conditions:
@@ -287,17 +266,12 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
 
         scan_mode must be 'otf' or 'step'; raises on failure.
         """
-        if scan_mode not in ("otf", "step"):
-            raise ValueError(
-                f"Unknown scan_mode '{scan_mode}'. Expected 'otf' or 'step'."
-            )
-
         if scan_mode == "otf":
             action_method = self.my_wire.start_scan
             ready_check = lambda: self.my_wire.homed and self.my_wire.on_status
             ready_desc = "homed and on"
             action_desc = "for on-the-fly scan"
-        else:
+        elif scan_mode == "step":
             action_method = self.my_wire.initialize
             ready_check = lambda: self.my_wire.enabled
             ready_desc = "enabled"
@@ -332,82 +306,6 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
         )
 
-    def _perform_step_scan(self) -> None:
-        """Run a step scan: init wire, start buffer, move positions, retract, wait."""
-
-        def _move_to_step_position(
-            position: int, position_index: int, total_positions: int
-        ) -> None:
-            """Move wire to a step position."""
-            self.logger.info(
-                f"Moving wire to {position} (step {position_index + 1}/{total_positions})..."
-            )
-
-            # Set speed and move
-            positions = _get_step_positions()
-            speed = _calculate_step_speed(position_index, positions)
-            self.my_wire.speed = speed
-            self.my_wire.motor = position
-
-            # Wait for position with 250 um tolerance
-            if not slac_measurements.utils.wait_until(
-                lambda: abs(self.my_wire.motor_rbv - position) < _WIRE_TOLERANCE,
-            ):
-                raise RuntimeError(
-                    f"{self.my_wire.name} did not reach position {position} after 10s."
-                )
-
-        def _calculate_step_speed(position_index: int, positions: list) -> int:
-            """Return speed for a step position: max for inner, computed for outer.
-
-            Even indices use speed_max; odd indices use calc speed.
-            """
-            if position_index % 2 == 0:
-                # inner position – use maximum speed
-                return int(self.my_wire.speed_max)
-
-            # outer position – calculate speed to span gap in one pulse train
-            position_delta = positions[position_index] - positions[position_index - 1]
-            speed = (position_delta / self.my_wire.scan_pulses) * self.my_wire.beam_rate
-            return int(speed)
-
-        def _get_step_positions() -> list:
-            """Return sorted inner/outer positions for active profiles."""
-            positions = []
-            for profile in self.my_wire.active_profiles():
-                for mode in ["inner", "outer"]:
-                    attr_name = f"{profile}_wire_{mode}"
-                    positions.append(getattr(self.my_wire, attr_name))
-            return sorted(positions)
-
-        # Start step scan sequence
-        self.logger.info("Performing step scan mode")
-
-        # Initialize wire for step scan (with retry logic, no continuous motion)
-        self._initialize_wire_with_retry(scan_mode="step")
-
-        # Start buffer acquisition after successful wire initialization
-        self.logger.info("Starting buffer acquisition for step scan...")
-        self.my_buffer.start()
-
-        # Get ordered positions and move to each
-        positions = _get_step_positions()
-        for i, position in enumerate(positions):
-            _move_to_step_position(position=position, position_index=i, total_positions=len(positions))
-
-        # Retract wire
-        self.logger.info("Retracting wire...")
-        self.my_wire.speed = int(self.my_wire.speed_max)
-        time.sleep(_WIRE_RETRACT_WAIT)  # Ensure speed change takes effect before retracting
-        self.my_wire.retract()
-        retract_posn = self.my_wire.motor_rbv
-        self.logger.info(f"Wire retraction command issued. Motor position: {retract_posn}")
-
-        # Wait for buffer acquisition to complete
-        self.logger.info("Waiting for buffer acquisition to complete...")
-        while not self.my_buffer.is_acquisition_complete():
-            time.sleep(0.1)
-
     def _reserve_buffer(self) -> object:
         if self.my_buffer is None:
             self.my_buffer = slac_measurements.wires.buffer.reserve_buffer(
@@ -419,55 +317,45 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
 
         return self.my_buffer
 
-    def _scan_with_wire(self, scan_mode: str = "step") -> None:
-        """
-        Kick off motion for the wire and (optionally) the buffer.
+    def _release_buffer_and_disable_torque_safely(self) -> None:
+        """Release BSA resources and disable torque when retract completed."""
+        if self.my_buffer is not None:
+            try:
+                self.logger.info("Releasing BSA buffer.")
+                self.my_buffer.release()
+            except Exception:
+                self.logger.exception("Failed while releasing BSA buffer.")
+            finally:
+                self.my_buffer = None
 
-        The behaviour depends on the requested ``scan_mode``.  The default is
-        ``step`` which drives the wire to each of the inner/outer positions one
-        at a time while the buffer is already running.  The latter is useful for
-        setups where the wire cannot use the
-        built-in continuous scan command.
+        try:
+            if self.my_wire.motor_rbv < 500:
+                self.my_wire.torque_enable = False
+        except Exception:
+            self.logger.exception("Failed while disabling wire motor torque.")
 
-        Parameters
-        ----------
-        scan_mode : str, optional
-            ``"otf"`` or ``"step"``.
-        """
-        # Reserve a new buffer if necessary
-        self.my_buffer = self._reserve_buffer()
 
-        if scan_mode == "otf":
-            self._initialize_wire_with_retry(scan_mode="otf")
-        elif scan_mode == "step":
-            self._perform_step_scan()
-        else:
-            raise ValueError(f"Unsupported scan_mode '{scan_mode}'")
+def create_wire_collection(
+    *,
+    scan_mode: ScanMode,
+    beam_profile_device: Wire,
+    beampath: str,
+) -> BaseWireMeasurementCollection:
+    """Instantiate the mode-specific wire collection class."""
+    if scan_mode == "step":
+        from slac_measurements.wires.step_collection import StepWireMeasurementCollection
 
-    def _start_timing_buffer(self) -> None:
-        """
-        Start a BSA buffer and wait for it to complete.  Post wire position to
-        the log every second.
-        """
-        # Start buffer
-        self.logger.info("Starting BSA buffer...")
-        self.my_buffer.start()
-
-        # Wait briefly before checking buffer 'ready'
-        # Wire is already moving, data is already collecting...
-        time.sleep(0.5)
-
-        # Wait for buffer 'ready'
-        i = 0
-        while not self.my_buffer.is_acquisition_complete():
-            # Check for completion every 0.1 s, post position 1s
-            time.sleep(0.1)
-            if i % 10 == 0:
-                self.logger.info("Wire position: %s", self.my_wire.motor_rbv)
-            i += 1
-
-        self.logger.info(
-            "BSA buffer %s acquisition complete after %s seconds",
-            self.my_buffer.number,
-            i / 10,
+        return StepWireMeasurementCollection(
+            beam_profile_device=beam_profile_device,
+            beampath=beampath,
         )
+
+    if scan_mode == "otf":
+        from slac_measurements.wires.otf_collection import OTFWireMeasurementCollection
+
+        return OTFWireMeasurementCollection(
+            beam_profile_device=beam_profile_device,
+            beampath=beampath,
+        )
+
+    raise ValueError(f"Unknown scan_mode '{scan_mode}'. Expected 'step' or 'otf'.")

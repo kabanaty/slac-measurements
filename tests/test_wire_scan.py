@@ -36,13 +36,13 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
 
     @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.create_wire_collection")
     def test_measure_uses_configured_fitting_method(
         self,
-        mock_collection_cls,
+        mock_create_collection,
         mock_analysis_cls,
     ):
-        mock_collection = mock_collection_cls.return_value
+        mock_collection = mock_create_collection.return_value
         mock_collection.measure.return_value = "collection-result"
 
         mock_analysis = mock_analysis_cls.return_value
@@ -57,24 +57,25 @@ class WireBeamProfileMeasurementTest(TestCase):
 
         self.assertEqual(result, "analysis-result")
         self.assertEqual(measurement.collection_result, "collection-result")
-        mock_collection_cls.assert_called_once_with(
+        mock_create_collection.assert_called_once_with(
+            scan_mode="step",
             beam_profile_device=measurement.beam_profile_device,
             beampath="TEST",
         )
-        mock_collection.measure.assert_called_once_with(scan_mode="step")
+        mock_collection.measure.assert_called_once_with()
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="super_gaussian",
         )
 
     @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.create_wire_collection")
     def test_measure_allows_fitting_method_override(
         self,
-        mock_collection_cls,
+        mock_create_collection,
         mock_analysis_cls,
     ):
-        mock_collection = mock_collection_cls.return_value
+        mock_collection = mock_create_collection.return_value
         mock_collection.measure.return_value = "collection-result"
 
         mock_analysis = mock_analysis_cls.return_value
@@ -88,7 +89,7 @@ class WireBeamProfileMeasurementTest(TestCase):
         result = measurement.measure(fitting_method="asymmetric_gaussian")
 
         self.assertEqual(result, "analysis-result")
-        mock_collection.measure.assert_called_once_with(scan_mode="step")
+        mock_collection.measure.assert_called_once_with()
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="asymmetric_gaussian",
@@ -114,11 +115,11 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
         mock_analysis.analyze.assert_called_once_with(rms_detector=None)
 
-    # measure() constructs WireMeasurementCollection internally, so we patch
+    # measure() constructs a mode-specific collection via factory, so we patch
     # it to keep this unit test isolated from collection setup behavior.
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
-    def test_measure_passes_rms_detector_override(self, mock_collection_cls):
-        mock_collection_cls.return_value.measure.return_value = "collection-result"
+    @patch("slac_measurements.wires.scan.create_wire_collection")
+    def test_measure_passes_rms_detector_override(self, mock_create_collection):
+        mock_create_collection.return_value.measure.return_value = "collection-result"
 
         measurement = WireBeamProfileMeasurement(
             beam_profile_device=self._make_wire_device(),
