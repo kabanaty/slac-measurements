@@ -62,6 +62,7 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
         self._initialize_wire_with_retry(scan_mode="step")
 
         self.logger.info("Starting buffer acquisition for step scan...")
+        acquisition_start = time.monotonic()
         self.my_buffer.start()
 
         positions = _get_step_positions()
@@ -75,15 +76,22 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
             )
 
         self.logger.info("Retracting wire...")
-        self.my_wire.speed = int(self.my_wire.speed_max)
         time.sleep(_WIRE_RETRACT_WAIT)
         self.my_wire.retract()
+        time.sleep(_WIRE_RETRACT_WAIT)
         self.logger.info(
             "Wire retraction command issued. Motor position: %s",
             self.my_wire.motor_rbv,
         )
 
         self.logger.info("Waiting for buffer acquisition to complete...")
+        
         while not self.my_buffer.is_acquisition_complete():
             time.sleep(0.1)
+
+        self.logger.info(
+            "Timing buffer %s acquisition complete after %.1f seconds",
+            self.my_buffer.number,
+            time.monotonic() - acquisition_start,
+        )
    
