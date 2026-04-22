@@ -1,114 +1,59 @@
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
 from slac_measurements.wires.collection import ScanMode, create_wire_collection
-from slac_measurements.wires.otf_collection import OTFWireMeasurementCollection
-from slac_measurements.wires.step_collection import StepWireMeasurementCollection
-from slac_measurements.wires.analysis import WireMeasurementAnalysis
+from slac_measurements.wires.analysis import FittingMethod, WireMeasurementAnalysis
 from slac_measurements.wires.analysis_results import (
     WireMeasurementAnalysisResult,
 )
 from slac_measurements.wires.collection_results import (
     WireMeasurementCollectionResult,
 )
-from typing import Literal, Optional
+from typing import Optional
 
 
 class WireBeamProfileMeasurement(
     slac_measurements.beam_profile.BeamProfileMeasurement
 ):
-    """
-    Orchestrates a full wire scan: accepts a wire device and beampath,
-    instantiates a WireMeasurementCollection, runs the scan, and returns
-    the analyzed result.
-
-    Attributes:
-        beam_profile_device (Wire): Wire device for the scan.
-        beampath (str): Beamline identifier passed to the collection.
-    """
+    """Full wire scan: collect and analyze beam profile data."""
 
     name: str = "Wire Beam Profile Measurement"
     beam_profile_device: Wire
     beampath: str
     collection_result: Optional[WireMeasurementCollectionResult] = None
 
-    def measure(
-        self,
-        scan_mode: ScanMode = "step",
-        fitting_method: Literal[
-            "gaussian", "asymmetric_gaussian", "super_gaussian"
-        ] = "gaussian",
-        rms_detector: Optional[str] = None,
+    def measure(self,
+                scan_mode: ScanMode = "step",
+                fitting_method: FittingMethod = "gaussian",
+                rms_detector: Optional[str] = None,
     ) -> WireMeasurementAnalysisResult:
         """
-        Instantiate a WireMeasurementCollection, run the scan, analyze, and
-        return the result.
+        Run a wire scan and return the analyzed result.
 
         Parameters
         ----------
-        scan_mode : Literal["otf", "step"]
-            ``"otf"`` or ``"step"`` (default).
-        fitting_method : str, optional
-            Fit model used by the downstream wire-scan analysis. Supported
-            values are ``"gaussian"``, ``"asymmetric_gaussian"``, and
-            ``"super_gaussian"``.
-        rms_detector : str, optional
-            Detector name to use when extracting RMS sizes. If omitted,
-            the collection metadata default detector is used.
-
-        Returns
-        -------
-        WireMeasurementAnalysisResult
-            Fit results, RMS beam sizes, and organized profile data.
+        scan_mode : "otf" or "step" (default).
+        fitting_method : "gaussian" (default), "asymmetric_gaussian", or "super_gaussian".
+        rms_detector : Detector for RMS sizes; defaults to the collection metadata default.
         """
-        collection: (
-            StepWireMeasurementCollection | OTFWireMeasurementCollection
-        ) = create_wire_collection(
+
+        def _analyze(fitting_method: FittingMethod,
+                     rms_detector: Optional[str] = None,
+        ) -> WireMeasurementAnalysisResult:
+            """Analyze the most recently collected wire-scan data."""
+
+            analysis = WireMeasurementAnalysis(
+                collection_result=self.collection_result,
+                fitting_method=fitting_method,
+            )
+            return analysis.analyze(rms_detector=rms_detector)
+
+        collection = create_wire_collection(
             scan_mode=scan_mode,
             beam_profile_device=self.beam_profile_device,
             beampath=self.beampath,
         )
         self.collection_result = collection.measure()
-        return self.analyze(
+        return _analyze(
             fitting_method=fitting_method,
             rms_detector=rms_detector,
         )
-
-    def analyze(
-        self,
-        fitting_method,
-        rms_detector: Optional[str] = None,
-    ) -> WireMeasurementAnalysisResult:
-        """
-        Analyze the most recently collected wire-scan data.
-
-        Parameters
-        ----------
-        fitting_method : str, optional
-            Fit model used by wire-scan analysis. If omitted, uses the
-            instance default ``self.fitting_method``, Gaussian.
-        rms_detector : str, optional
-            Detector name to use when extracting RMS sizes. If omitted,
-            the collection metadata default detector is used.
-
-        Returns
-        -------
-        WireMeasurementAnalysisResult
-            Fit results, RMS beam sizes, and organized profile data.
-
-        Raises
-        ------
-        RuntimeError
-            If no collection data is available. Run ``measure()`` first.
-        """
-        if self.collection_result is None:
-            msg = (
-                "No collection_result available. "
-                "Run measure() before analyze()."
-            )
-            raise RuntimeError(msg)
-
-        analysis = WireMeasurementAnalysis(
-            collection_result=self.collection_result,
-            fitting_method=fitting_method,
-        )
-        return analysis.analyze(rms_detector=rms_detector)
