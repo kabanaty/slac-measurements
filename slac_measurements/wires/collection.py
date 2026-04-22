@@ -78,7 +78,7 @@ class BaseWireMeasurementCollection(
             self._run_collection_scan()
             self.data = self._get_data_from_buffer()
         finally:
-            self._release_buffer_and_disable_torque_safely()
+            self._release_buffer_safely()
 
         return WireMeasurementCollectionResult(
             raw_data=self.data,
@@ -104,10 +104,6 @@ class BaseWireMeasurementCollection(
         # Generate dictionary of all required lcls-tools device objects
         self.devices = self._create_device_dictionary()
         return self
-
-    @abstractmethod
-    def _run_collection_scan(self) -> None:
-        """Run mode-specific wire motion and buffer timing behavior."""
 
     def _create_device_dictionary(self) -> dict:
         # TODO: Move to its own module
@@ -306,6 +302,17 @@ class BaseWireMeasurementCollection(
             f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
         )
 
+    def _release_buffer_safely(self) -> None:
+        """Release BSA resources after scan completion."""
+        if self.my_buffer is not None:
+            try:
+                self.logger.info("Releasing BSA buffer.")
+                self.my_buffer.release()
+            except Exception:
+                self.logger.exception("Failed while releasing BSA buffer.")
+            finally:
+                self.my_buffer = None
+
     def _reserve_buffer(self) -> object:
         if self.my_buffer is None:
             self.my_buffer = slac_measurements.wires.buffer.reserve_buffer(
@@ -317,23 +324,9 @@ class BaseWireMeasurementCollection(
 
         return self.my_buffer
 
-    def _release_buffer_and_disable_torque_safely(self) -> None:
-        """Release BSA resources and disable torque when retract completed."""
-        if self.my_buffer is not None:
-            try:
-                self.logger.info("Releasing BSA buffer.")
-                self.my_buffer.release()
-            except Exception:
-                self.logger.exception("Failed while releasing BSA buffer.")
-            finally:
-                self.my_buffer = None
-
-        try:
-            if self.my_wire.motor_rbv < 500:
-                self.my_wire.torque_enable = False
-        except Exception:
-            self.logger.exception("Failed while disabling wire motor torque.")
-
+    @abstractmethod
+    def _run_collection_scan(self) -> None:
+        """Run mode-specific wire motion and buffer timing behavior."""
 
 def create_wire_collection(
     *,
