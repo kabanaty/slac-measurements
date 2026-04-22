@@ -16,7 +16,7 @@ class MeasurementMetadata(BaseModel):
     default_detector: str
     rms_detector: Optional[str] = None
     scan_ranges: Dict[str, Tuple[int, int]]
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
     active_profiles: list[str]
     install_angle: float
     notes: Optional[str] = None
