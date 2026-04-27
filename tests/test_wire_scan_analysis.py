@@ -67,7 +67,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -77,7 +77,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.2, 4.8, 5.1, 4.9, 5.0, 5.5, 6.0, 6.5, 7.0])
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([4, 5, 6, 7, 8])
@@ -89,7 +89,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 5.0, 5.0, 5.1, 5.2, 5.3])
         indices = np.array([0, 1, 2, 3, 4, 5])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All indices should be included (flat is monotonically non-decreasing)
         expected = np.array([0, 1, 2, 3, 4, 5])
@@ -103,7 +103,7 @@ class TestGetMonotonicIndices(TestCase):
         ])
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([4, 5, 6, 7, 8])
@@ -114,7 +114,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0])
         indices = np.array([0])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -123,7 +123,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([])
         indices = np.array([], dtype=int)
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -132,7 +132,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 6.0])
         indices = np.array([0, 1])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -141,7 +141,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([6.0, 5.0])
         indices = np.array([0, 1])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Two runs of length 1 tie; implementation keeps the later run.
         expected = np.array([1])
@@ -155,7 +155,7 @@ class TestGetMonotonicIndices(TestCase):
         indices = np.array([5, 6, 7, 8, 9, 10, 11])
         # Corresponding positions: [5.2, 4.8, 5.1, 4.9, 5.0, 5.5, 6.0]
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([9, 10, 11])
@@ -166,7 +166,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([10.0, 9.0, 8.0, 7.0, 6.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All runs have length 1; implementation keeps the later run on ties.
         expected = np.array([4])
@@ -177,7 +177,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 5.0, 5.0, 5.0, 5.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All should be returned (equal values are monotonic non-decreasing)
         np.testing.assert_array_equal(result, indices)
@@ -188,7 +188,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.2, 4.8, 5.0, 5.0, 5.0, 5.1, 5.2])
         indices = np.array([0, 1, 2, 3, 4, 5, 6])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([2, 3, 4, 5, 6])
@@ -202,7 +202,7 @@ class TestGetMonotonicIndices(TestCase):
         ])
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         expected = np.array([6, 7, 8, 9, 10])
         np.testing.assert_array_equal(result, expected)
@@ -212,7 +212,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([28900.0, 28910.0, 28920.0, 28919.0, 28930.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         expected = np.array([0, 1, 2])
         np.testing.assert_array_equal(result, expected)

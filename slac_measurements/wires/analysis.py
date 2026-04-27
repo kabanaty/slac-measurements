@@ -83,7 +83,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             values=data_slice, units=_get_units_for_device(device_name), label=device_name
         )
 
-    def _fit_data_by_profile(self, profile_measurements) -> dict:
+    def _fit_data_by_profile(self, profile_measurements) -> dict[str, FitResult]:
         """Fit detector data for each profile using the configured method."""
 
         profiles = list(profile_measurements.keys())
@@ -215,8 +215,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return FitResult(detectors=detector_fits)
 
-    def _get_monotonic_indices(self,
-                               position_data: np.ndarray, indices: np.ndarray
+    @staticmethod
+    def _get_monotonic_indices(
+        position_data: np.ndarray, indices: np.ndarray
     ) -> np.ndarray:
         """Return the longest contiguous non-decreasing segment of indices."""
 

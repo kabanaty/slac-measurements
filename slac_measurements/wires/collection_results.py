@@ -10,6 +10,7 @@ from slac_measurements.beam_profile import BeamProfileCollectionResult
 
 class MeasurementMetadata(BaseModel):
     wire_name: str
+    buffer_number: Optional[int] = None
     area: str
     beampath: str
     detectors: list[str]
@@ -51,7 +52,7 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
             f"area='{meta.area}', "
             f"beampath='{meta.beampath}', "
             f"devices={num_devices}, "
-            f"timestamp={meta.timestamp.isoformat()})"
+            f"timestamp={meta.timestamp.isoformat() if meta.timestamp is not None else None})"
         )
 
     def save_to_h5(self, filepath: str) -> None:
@@ -82,12 +83,15 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
 
         # Store scalar metadata as attributes
         group.attrs["wire_name"] = meta.wire_name
+        if meta.buffer_number is not None:
+            group.attrs["buffer_number"] = meta.buffer_number
         group.attrs["area"] = meta.area
         group.attrs["beampath"] = meta.beampath
         group.attrs["default_detector"] = meta.default_detector
         if meta.rms_detector is not None:
             group.attrs["rms_detector"] = meta.rms_detector
-        group.attrs["timestamp"] = meta.timestamp.isoformat()
+        if meta.timestamp is not None:
+            group.attrs["timestamp"] = meta.timestamp.isoformat()
         group.attrs["active_profiles"] = meta.active_profiles
         group.attrs["install_angle"] = meta.install_angle
 
@@ -158,12 +162,13 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
     """Load measurement metadata from HDF5 group."""
     # Load scalar attributes
     wire_name = group.attrs["wire_name"]
+    buffer_number = group.attrs.get("buffer_number", None)
     area = group.attrs["area"]
     beampath = group.attrs["beampath"]
     default_detector = group.attrs["default_detector"]
     rms_detector = group.attrs.get("rms_detector", None)
-    timestamp_str = group.attrs["timestamp"]
-    timestamp = datetime.fromisoformat(timestamp_str)
+    timestamp_str = group.attrs.get("timestamp", None)
+    timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str is not None else None
     active_profiles = group.attrs["active_profiles"]
     install_angle = group.attrs["install_angle"]
     notes = group.attrs.get("notes", None)
@@ -181,6 +186,7 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
 
     return MeasurementMetadata(
         wire_name=wire_name,
+        buffer_number=buffer_number,
         area=area,
         beampath=beampath,
         detectors=detectors,

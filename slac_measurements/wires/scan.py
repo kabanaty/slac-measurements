@@ -36,24 +36,14 @@ class WireBeamProfileMeasurement(
         rms_detector : Detector for RMS sizes; defaults to the collection metadata default.
         """
 
-        def _analyze(fitting_method: FittingMethod,
-                     rms_detector: Optional[str] = None,
-        ) -> WireMeasurementAnalysisResult:
-            """Analyze the most recently collected wire-scan data."""
-
-            analysis = WireMeasurementAnalysis(
-                collection_result=self.collection_result,
-                fitting_method=fitting_method,
-            )
-            return analysis.analyze(rms_detector=rms_detector)
-
         collection = create_wire_collection(
             scan_mode=scan_mode,
             beam_profile_device=self.beam_profile_device,
             beampath=self.beampath,
         )
         self.collection_result = collection.measure()
-        return _analyze(
+        analysis = WireMeasurementAnalysis(
+            collection_result=self.collection_result,
             fitting_method=fitting_method,
-            rms_detector=rms_detector,
         )
+        return analysis.analyze(rms_detector=rms_detector)

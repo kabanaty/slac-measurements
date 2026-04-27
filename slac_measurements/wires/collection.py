@@ -18,8 +18,6 @@ from slac_measurements.wires.collection_results import (
 )
 
 _LOG_DIR = Path("/u1/lcls/physics/data/wire_scan/logs")
-_LOG_FILENAME = f"ws_log_{datetime.now().strftime('%Y%m%d')}.txt"
-_LOG_FILEPATH = _LOG_DIR / _LOG_FILENAME
 _LOGGER_NAME = "wire_scan_logger"
 ScanMode = Literal["step", "otf"]
 
@@ -70,14 +68,14 @@ class BaseWireMeasurementCollection(
             if self.my_buffer is not None:
                 try:
                     buffer_number = self.my_buffer.number
-                    self.logger.info(f"Releasing timing buffer {buffer_number}.")
+                    self.logger.info("Releasing timing buffer %s.", buffer_number)
                     self.my_buffer.release()
                 except Exception:
-                    self.logger.exception(f"Failed while releasing timing buffer {buffer_number}. ")
+                    self.logger.exception("Failed while releasing timing buffer %s.", buffer_number)
                 finally:
                     self.my_buffer = None
 
-        self.my_buffer = self._reserve_buffer()
+        self._prepare_runtime_state()
 
         try:
             self._run_collection_scan()
@@ -99,6 +97,99 @@ class BaseWireMeasurementCollection(
     @my_wire.setter
     def my_wire(self, value):
         self.beam_profile_device = value
+
+    def _create_device_dictionary(self) -> dict:
+        """Create dictionary of required devices. Includes the wire device and detectors."""
+
+        def _instantiate_device(name: str, area: str):
+            """Instantiate a single device by name and area."""
+
+            import slac_devices.reader
+            import slac_measurements.tmit_loss
+
+            if name == "TMITLOSS":
+                return slac_measurements.tmit_loss.TMITLoss(
+                    my_buffer=self.my_buffer,
+                    my_wire=self.my_wire,
+                    beampath=self.beampath,
+                    region=self.my_wire.area,
+                )
+
+            create_by_prefix = {
+                "LBLM": slac_devices.reader.create_lblm,
+                "PMT": slac_devices.reader.create_pmt,
+            }
+
+            creator = next(
+                (f for prefix, f in create_by_prefix.items() if name.startswith(prefix)),
+                None,
+            )
+
+            if creator is None:
+                self.logger.warning("Unknown device type '%s'. Skipping.", name)
+                return None
+
+            device = creator(area=area, name=name)
+            if device is None:
+                self.logger.warning("Device creation for %s returned None.", name)
+
+            return device
+
+        self.logger.info("Creating device dictionary...")
+
+        devices = {self.my_wire.name: self.my_wire}
+
+        for ds in self.my_wire.metadata.detectors:
+            name, area = ds.split(":")
+            detector = _instantiate_device(name, area)
+            if detector is not None:
+                devices[name] = detector
+
+        self.logger.info("Device dictionary built.")
+        return devices
+
+    def _create_metadata(self) -> MeasurementMetadata:
+        """Create per-run metadata for the current scan."""
+
+        def _get_default_detector() -> str:
+            """Determine the default detector for analysis from wire metadata or device list."""
+
+            default_detector = self.my_wire.metadata.default_detector
+
+            if not default_detector:
+                if not self.detectors:
+                    msg = (
+                        "No detectors available from wire metadata; "
+                        "cannot determine default detector."
+                    )
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                return self.detectors[0]
+
+            return default_detector.split(":", 1)[0]
+
+        def _get_scan_ranges() -> dict:
+            """Return dictionary of scan ranges for x, y, and u motors."""
+
+            return {
+                "x": self.my_wire.x_range,
+                "y": self.my_wire.y_range,
+                "u": self.my_wire.u_range,
+            }
+
+        return MeasurementMetadata(
+            wire_name=self.my_wire.name,
+            buffer_number=self.my_buffer.number,
+            area=self.my_wire.area,
+            beampath=self.beampath,
+            detectors=self.detectors,
+            default_detector=_get_default_detector(),
+            scan_ranges=_get_scan_ranges(),
+            timestamp=None,
+            active_profiles=self.my_wire.active_profiles(),
+            install_angle=self.my_wire.install_angle,
+            notes=None,
+        )
 
     def _get_data_from_buffer(self) -> dict:
         """Collects wire scan and detector data after buffer completes."""
@@ -163,13 +254,13 @@ class BaseWireMeasurementCollection(
 
         # Skip initialization if wire is already in the expected ready state
         if ready_check():
-            self.logger.info(f"{self.my_wire.name} is already {ready_desc}.")
+            self.logger.info("%s is already %s.", self.my_wire.name, ready_desc)
             return
 
         for attempt in range(1, max_attempts + 1):
             self.logger.info(
-                f"Initializing {self.my_wire.name} {action_desc}: "
-                f"(Attempt {attempt}/{max_attempts})..."
+                "Initializing %s %s: (Attempt %s/%s)...",
+                self.my_wire.name, action_desc, attempt, max_attempts,
             )
             action_method()
 
@@ -190,6 +281,13 @@ class BaseWireMeasurementCollection(
             f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
         )
 
+    def _prepare_runtime_state(self) -> None:
+        """Prepare per-run state that depends on an active timing buffer."""
+
+        self.my_buffer = self._reserve_buffer()
+        self.devices = self._create_device_dictionary()
+        self.metadata = self._create_metadata()
+
     def _reserve_buffer(self) -> object:
         """Reserve a timing buffer for the scan based on beampath and wire metadata."""
 
@@ -209,123 +307,21 @@ class BaseWireMeasurementCollection(
 
     @model_validator(mode="after")
     def _run_setup(self) -> Self:
-        """Initialize logger, reserve buffer, and build devices/metadata."""
+        """Initialize construction-time state for a collection instance."""
 
         import slac_measurements.logger.file_logger
 
-        def _create_device_dictionary() -> dict:
-            """Create dictionary of required devices. Includes the wire device and detectors."""
-
-            self.logger.info("Creating device dictionary...")
-
-            # Instantiate device dictionary with wire device
-            devices = {self.my_wire.name: self.my_wire}
-
-            # ds is a colon-separated detector string from metadata
-            # e.g. "LBLM:TEST" -> name = "LBLM", area = "TEST"
-            for ds in self.my_wire.metadata.detectors:
-                name, area = ds.split(":")
-                detector = _instantiate_device(name, area)
-                if detector is not None:
-                    devices[name] = detector
-
-            self.logger.info("Device dictionary built.")
-            return devices
-
-        def _create_metadata() -> MeasurementMetadata:
-            """Make additional metadata."""
-            
-            return MeasurementMetadata(
-                wire_name=self.my_wire.name,
-                buffer_number=self.my_buffer.number,
-                area=self.my_wire.area,
-                beampath=self.beampath,
-                detectors=self.detectors,
-                default_detector=_get_default_detector(),
-                scan_ranges=_get_scan_ranges(),
-                timestamp=None,
-                active_profiles=self.my_wire.active_profiles(),
-                install_angle=self.my_wire.install_angle,
-                notes=None,
-            )
-
-        def _get_default_detector() -> str:
-            """Determine the default detector for analysis from wire metadata or device list."""
-
-            default_detector = self.my_wire.metadata.default_detector
-
-            if not default_detector:
-                if not self.detectors:
-                    msg = (
-                        "No detectors available from wire metadata; "
-                        "cannot determine default detector."
-                    )
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                return self.detectors[0]
-
-            # Metadata may be stored as "<name>:<area>"; analysis expects the device name key.
-            return default_detector.split(":", 1)[0]
-
-        def _get_scan_ranges():
-            """Return dictionary of scan ranges for x, y, and u motors."""
-
-            return {
-                "x": self.my_wire.x_range,
-                "y": self.my_wire.y_range,
-                "u": self.my_wire.u_range,
-            }
-
-        def _instantiate_device(name: str, area: str):
-            """Instantiate a single device by name and area."""
-
-            import slac_devices.reader
-            import slac_measurements.tmit_loss
-
-            if name == "TMITLOSS":
-                return slac_measurements.tmit_loss.TMITLoss(
-                    my_buffer=self.my_buffer,
-                    my_wire=self.my_wire,
-                    beampath=self.beampath,
-                    region=self.my_wire.area,
-                )
-
-            create_by_prefix = {
-                "LBLM": slac_devices.reader.create_lblm,
-                "PMT": slac_devices.reader.create_pmt,
-            }
-
-            creator = next(
-                (f for prefix, f in create_by_prefix.items() if name.startswith(prefix)),
-                None,
-            )
-
-            if creator is None:
-                self.logger.warning("Unknown device type '%s'. Skipping.", name)
-                return None
-
-            device = creator(area=area, name=name)
-            if device is None:
-                self.logger.warning("Device creation for %s returned None.", name)
-
-            return device
-
-        # Configure logger
+        # Configure logger — compute filename now so long-running processes
+        # get a fresh date-stamped file rather than the one frozen at import.
+        log_filepath = _LOG_DIR / f"ws_log_{datetime.now().strftime('%Y%m%d')}.txt"
         self.logger = slac_measurements.logger.file_logger.custom_logger(
-            log_file=str(_LOG_FILEPATH),
+            log_file=str(log_filepath),
             name=_LOGGER_NAME,
         )
         self.logger.propagate = False
 
-        # Reserve timing buffer
-        self.my_buffer = self._reserve_buffer()
-
         # Get list of detector names from wire metadata
         self.detectors = [d.split(":")[0] for d in self.my_wire.metadata.detectors]
-
-        # Generate dictionary of all required lcls-tools device objects
-        self.devices = _create_device_dictionary()
-        self.metadata = _create_metadata()
         return self
 
 def create_wire_collection(*,
