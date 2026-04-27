@@ -31,7 +31,7 @@ class WireBeamProfileMeasurement(
 
         Parameters
         ----------
-        scan_mode : "otf" or "step" (default).
+        scan_mode : "otf" (default) or "step".
         fitting_method : "gaussian" (default), "asymmetric_gaussian", or "super_gaussian".
         rms_detector : Detector for RMS sizes; defaults to the collection metadata default.
         """

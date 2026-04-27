@@ -254,7 +254,7 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
 
         result = analysis._create_detector_measurement("TMITLOSS", np.array([1.0, 2.0]))
 
-        self.assertEqual(result.units, "%% beam loss")
+        self.assertEqual(result.units, "% beam loss")
         self.assertEqual(result.label, "TMITLOSS")
         np.testing.assert_array_equal(result.values, np.array([1.0, 2.0]))
 

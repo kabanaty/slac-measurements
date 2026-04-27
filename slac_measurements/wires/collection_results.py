@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import h5py
 import numpy as np
@@ -10,17 +10,17 @@ from slac_measurements.beam_profile import BeamProfileCollectionResult
 
 class MeasurementMetadata(BaseModel):
     wire_name: str
-    buffer_number: Optional[int] = None
+    buffer_number: int | None = None
     area: str
     beampath: str
     detectors: list[str]
     default_detector: str
-    rms_detector: Optional[str] = None
-    scan_ranges: Dict[str, Tuple[int, int]]
-    timestamp: Optional[datetime] = None
+    rms_detector: str | None = None
+    scan_ranges: dict[str, tuple[int, int]]
+    timestamp: datetime | None = None
     active_profiles: list[str]
     install_angle: float
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class WireMeasurementCollectionResult(BeamProfileCollectionResult):
@@ -39,7 +39,7 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    raw_data: Dict[str, Any]
+    raw_data: dict[str, Any]
     metadata: MeasurementMetadata
 
     def __repr__(self) -> str:
@@ -200,7 +200,7 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
     )
 
 
-def _load_raw_data(group: h5py.Group) -> Dict[str, Any]:
+def _load_raw_data(group: h5py.Group) -> dict[str, Any]:
     """Load raw detector data from HDF5 group."""
     raw_data = {}
 

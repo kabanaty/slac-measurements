@@ -113,7 +113,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             f"profiles={profile_count}, "
             f"fit_profiles={fit_profile_count}, "
             f"detectors={detector_count}, "
-            f"timestamp={meta.timestamp.isoformat()})"
+            f"timestamp={meta.timestamp.isoformat() if meta.timestamp is not None else None})"
         )
 
     def save_to_h5(self, filepath: str) -> None:

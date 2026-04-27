@@ -1,5 +1,6 @@
 import logging
 import getpass
+from typing import Optional
 import numpy as np
 
 
@@ -29,7 +30,7 @@ def reserve_buffer(
     beam_rate: int,
     name: str = _BUFFER_NAME,
     destination_mode: str = "Inclusion",
-    logger: logging.Logger = None,
+    logger: Optional[logging.Logger] = None,
 ):
     user = _get_username()
     if logger:
@@ -104,7 +105,7 @@ def _reserve_bsa_buffer(
     user: str,
     n_measurements: int,
     destination_mode: str,
-    logger: logging.Logger = None,
+    logger: Optional[logging.Logger] = None,
 ):
     import edef
 

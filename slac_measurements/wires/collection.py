@@ -209,8 +209,6 @@ class BaseWireMeasurementCollection(
         def _collect_device_data(device_name: str) -> np.ndarray:
             """Collect data for a given device using the appropriate method."""
 
-            import slac_measurements.utils
-
             device = self.devices[device_name]
             buffer_method = _get_buffer_collection_method(device_name)
 

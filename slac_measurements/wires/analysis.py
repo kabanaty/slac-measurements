@@ -76,7 +76,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         def _get_units_for_device(device_name: str) -> str:
             """Get the appropriate units for a given device based on its name."""
             if device_name == "TMITLOSS":
-                return "%% beam loss"
+                return "% beam loss"
             return "counts"
 
         return DetectorProfileMeasurement(
@@ -158,7 +158,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 filter_size (int): Median filter size (default 5).
 
             Returns:
-                tuple: (windowed_x, windowed_y, (left_idx, right_idx)).
+                tuple: (windowed_x, windowed_y).
             """
 
             x = np.asarray(x)
@@ -250,7 +250,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return indices[best_start:best_end]
 
-    def _get_profile_range_indices(self) -> dict:
+    def _get_profile_range_indices(self) -> dict[str, np.ndarray]:
         """Finds sequential scan indices within each profile's position range."""
 
         def _get_indices_in_range(position_data: np.ndarray,
@@ -348,7 +348,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return (x_rms, y_rms)
 
-    def _organize_data_by_profile(self, profile_indices) -> dict:
+    def _organize_data_by_profile(self, profile_indices: dict[str, np.ndarray]) -> dict[str, ProfileMeasurement]:
         """
         Organizes detector data by scan profile for each device.
 
