@@ -1,5 +1,3 @@
-from typing import Dict
-
 import numpy as np
 
 from pydantic import BaseModel, ConfigDict
@@ -42,14 +40,14 @@ class DetectorFit(BaseModel):
 
 class FitResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    detectors: Dict[str, DetectorFit]
+    detectors: dict[str, DetectorFit]
 
 
 class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    fit_result: Dict[str, FitResult]
+    fit_result: dict[str, FitResult]
     collection_result: WireMeasurementCollectionResult
-    profiles: Dict[str, ProfileMeasurement]
+    profiles: dict[str, ProfileMeasurement]
 
     def set_rms_detector(self, detector: str | None = None) -> None:
         """Mutate the result to use a different detector for RMS sizes.
@@ -257,10 +255,10 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
         # analysis
         analysis_grp = f["analysis"]
 
-        fit_result: Dict[str, FitResult] = {}
+        fit_result: dict[str, FitResult] = {}
         for profile in analysis_grp["fit_result"].keys():
             prof_grp = analysis_grp["fit_result"][profile]
-            dets: Dict[str, DetectorFit] = {}
+            dets: dict[str, DetectorFit] = {}
             for det_name in prof_grp.keys():
                 dg = prof_grp[det_name]
                 dets[det_name] = DetectorFit(
@@ -273,7 +271,7 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
                 )
             fit_result[profile] = FitResult(detectors=dets)
 
-        profiles: Dict[str, ProfileMeasurement] = {}
+        profiles: dict[str, ProfileMeasurement] = {}
         for profile in analysis_grp["profiles"].keys():
             pgrp = analysis_grp["profiles"][profile]
             detectors = {}

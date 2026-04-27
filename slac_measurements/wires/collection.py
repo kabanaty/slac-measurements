@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 from pydantic import model_validator
@@ -42,12 +42,12 @@ class BaseWireMeasurementCollection(
     name: str = "Wire Beam Profile Measurement"
     beam_profile_device: Wire
     beampath: str
-    my_buffer: Optional[object] = None
-    devices: Optional[dict] = None
-    detectors: Optional[list] = None
-    data: Optional[dict] = None
-    logger: Optional[logging.Logger] = None
-    metadata: Optional[MeasurementMetadata] = None
+    my_buffer: object | None = None
+    devices: dict | None = None
+    detectors: list | None = None
+    data: dict | None = None
+    logger: logging.Logger | None = None
+    metadata: MeasurementMetadata | None = None
 
     def measure(self) -> WireMeasurementCollectionResult:
         """
@@ -194,7 +194,7 @@ class BaseWireMeasurementCollection(
     def _get_data_from_buffer(self) -> dict:
         """Collects wire scan and detector data after buffer completes."""
 
-        def _get_buffer_collection_method(device_name: str) -> Optional[str]:
+        def _get_buffer_collection_method(device_name: str) -> str | None:
             """Determine the buffer collection method for a given device based on its name."""
 
             if device_name == self.my_wire.name:
