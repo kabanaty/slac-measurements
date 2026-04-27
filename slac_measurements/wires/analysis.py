@@ -198,7 +198,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             left = max(0, left)
             right = min(len(y) - 1, right)
 
-            return x[left : right + 1], y[left : right + 1], (left, right)
+            return x[left : right + 1], y[left : right + 1]
 
         profile_data = profile_measurements[profile]
         x_stage = profile_data.positions
@@ -265,7 +265,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             if position_data.min() == position_data.max():
                 msg = (
                     "Min and max position are the same. Check scan data "
-                    "and collection. Exiting scan."
+                    "and collection."
                 )
                 raise RuntimeError(msg)
 
@@ -281,8 +281,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             if position_data.max() < profile_range[0]:
                 msg = (
                     f"Scan did not reach expected {profile} profile range "
-                    f"{profile_range}. Check scan data and collection. "
-                    f"Exiting scan."
+                    f"{profile_range}. Check scan data and collection."
                 )
                 raise RuntimeError(msg)
 
