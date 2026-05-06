@@ -16,6 +16,7 @@ from pydantic import (
 from slac_devices.magnet import Magnet
 from slac_measurements.emittance import compute_emit_bmag, normalize_emittance
 from slac_measurements.measurement import Measurement
+from slac_measurements.screen_profile import ScreenBeamProfileMeasurement
 from slac_measurements.utils import (
     NDArrayAnnotatedType,
 )
@@ -85,6 +86,7 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     emittance: NDArrayAnnotatedType
     bmag: Optional[NDArrayAnnotatedType] = None
     twiss: NDArrayAnnotatedType
+    rmats: Optional[NDArrayAnnotatedType] = None
     rms_beamsizes: NDArrayAnnotatedType
     beam_matrix: NDArrayAnnotatedType
     metadata: SerializeAsAny[Any]
@@ -287,7 +289,7 @@ class EmittanceMeasurementBase(Measurement):
             beam_profiles, rmats, design_twiss, self.energy
         )
 
-        return self.construct_result(emittance_dict, beam_sizes)
+        return self.construct_result(emittance_dict, beam_sizes, rmats)
 
     @abstractmethod
     def retrieve_beam_profiles_and_optics(self):
@@ -417,6 +419,7 @@ class QuadScanEmittance(Measurement):
     _info: Optional[list] = []
 
     rmat: Optional[ndarray] = None
+    raw_rmats: Optional[NDArrayAnnotatedType] = None
     design_twiss: Optional[dict] = None  # design twiss values
     physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
 
@@ -537,6 +540,7 @@ class QuadScanEmittance(Measurement):
 
                 # compute emittance and bmag
                 result = compute_emit_bmag(**emit_kwargs)
+                result["emittance"] = normalize_emittance(result["emittance"], self.energy)
 
                 result.update({"quadrupole_focusing_strengths": kmod_list[i]})
                 result.update({"quadrupole_pv_values": scan_values[i][idx]})
@@ -562,18 +566,17 @@ class QuadScanEmittance(Measurement):
             }
             # Call wrapper that takes quads in machine units and beamsize in meters
             results = compute_emit_bmag_quad_scan_machine_units(**inputs)
-        results.update(
-            {
-                "metadata": self.model_dump()
-                | {
-                    "resolution": self.beamsize_measurement.beam_profile_device.resolution,
-                    "image_data": {
-                        str(sval): ele.model_dump()
-                        for sval, ele in zip(self.scan_values, self._info)
-                    },
-                }
+        
+        metadata = self.model_dump()
+        if isinstance(self.beamsize_measurement, ScreenBeamProfileMeasurement):
+            metadata["resolution"] = self.beamsize_measurement.beam_profile_device.resolution
+            metadata["image_data"] = {
+                str(sval): ele.model_dump()
+                for sval, ele in zip(self.scan_values, self._info)
             }
-        )
+
+        results["metadata"] = metadata
+        results["rmats"] = np.array(self.raw_rmats)
 
         # collect information into EmittanceMeasurementResult object
         return QuadScanEmittanceResult(**results)
@@ -605,6 +608,9 @@ class QuadScanEmittance(Measurement):
             self.rmat.append(np.stack([rmat[0:2, 0:2], rmat[2:4, 2:4]]))
             if not self.design_twiss:
                 self.design_twiss = optics["design_twiss"]
+            if not self.rmats:
+                self.raw_rmats = []
+            self.raw_rmats.append(rmat)
 
     def _get_beamsizes_scan_values_from_info(self) -> ndarray:
         """
@@ -666,7 +672,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
 
         return beam_profiles, rmats, design_twiss
 
-    def construct_result(self, emittance_dict, beam_sizes):
+    def construct_result(self, emittance_dict, beam_sizes, rmats):
         """
 
         Calculate the emittance from the measured beam sizes and quadrupole strengths.
@@ -684,6 +690,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             "beam_profile_devices_names": beam_profile_devices_names,
             "beam_profile_devices_z": beam_profile_devices_z,
             "rms_beamsizes": beam_sizes,
+            "rmats": rmats,
             "metadata": metadata,
         }
 
