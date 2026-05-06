@@ -86,9 +86,12 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     emittance: NDArrayAnnotatedType
     bmag: Optional[NDArrayAnnotatedType] = None
     twiss: NDArrayAnnotatedType
+    twiss_at_reconstruction: NDArrayAnnotatedType
     rmats: Optional[NDArrayAnnotatedType] = None
+    design_twiss: Optional[NDArrayAnnotatedType] = None
     rms_beamsizes: NDArrayAnnotatedType
     beam_matrix: NDArrayAnnotatedType
+    energy: float
     metadata: SerializeAsAny[Any]
 
 class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
@@ -289,7 +292,7 @@ class EmittanceMeasurementBase(Measurement):
             beam_profiles, rmats, design_twiss, self.energy
         )
 
-        return self.construct_result(emittance_dict, beam_sizes, rmats)
+        return self.construct_result(emittance_dict, beam_sizes, rmats, design_twiss)
 
     @abstractmethod
     def retrieve_beam_profiles_and_optics(self):
@@ -542,9 +545,13 @@ class QuadScanEmittance(Measurement):
                 result = compute_emit_bmag(**emit_kwargs)
                 result["emittance"] = normalize_emittance(result["emittance"], self.energy)
 
-                result.update({"quadrupole_focusing_strengths": kmod_list[i]})
-                result.update({"quadrupole_pv_values": scan_values[i][idx]})
-                result.update({"rms_beamsizes": beam_sizes[i][idx]})
+                result.update(
+                    {
+                        "quadrupole_focusing_strengths": kmod_list[i],
+                        "quadrupole_pv_values": scan_values[i][idx],
+                        "rms_beamsizes": beam_sizes[i][idx] * 1e6,
+                    }
+                )
 
                 # add results to dict object
                 for name, value in result.items():
@@ -575,8 +582,14 @@ class QuadScanEmittance(Measurement):
                 for sval, ele in zip(self.scan_values, self._info)
             }
 
-        results["metadata"] = metadata
-        results["rmats"] = np.array(self.raw_rmats)
+        results.update(
+            {
+                "metadata": metadata,
+                "rmats": np.array(self.raw_rmats),
+                "design_twiss": self.design_twiss,
+                "energy": self.energy,
+            }
+        )
 
         # collect information into EmittanceMeasurementResult object
         return QuadScanEmittanceResult(**results)
@@ -672,7 +685,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
 
         return beam_profiles, rmats, design_twiss
 
-    def construct_result(self, emittance_dict, beam_sizes, rmats):
+    def construct_result(self, emittance_dict, beam_sizes, rmats, design_twiss):
         """
 
         Calculate the emittance from the measured beam sizes and quadrupole strengths.
@@ -691,6 +704,8 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             "beam_profile_devices_z": beam_profile_devices_z,
             "rms_beamsizes": beam_sizes,
             "rmats": rmats,
+            "design_twiss": design_twiss,
+            "energy": self.energy,
             "metadata": metadata,
         }
 
