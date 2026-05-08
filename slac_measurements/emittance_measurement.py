@@ -263,7 +263,7 @@ class EmittanceMeasurementBase(Measurement):
     """
 
     energy: float
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 5.0
 
@@ -424,7 +424,7 @@ class QuadScanEmittance(Measurement):
     rmat: Optional[ndarray] = None
     raw_rmats: Optional[NDArrayAnnotatedType] = None
     design_twiss: Optional[dict] = None  # design twiss values
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 1.0
 
@@ -700,8 +700,6 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
         beam_profile_devices_z = [measurement.beam_profile_device.sum_l_meters for measurement in self.beamsize_measurements]
         metadata = self.model_dump()
         results_dict = emittance_dict | {
-            "beam_profile_devices_names": beam_profile_devices_names,
-            "beam_profile_devices_z": beam_profile_devices_z,
             "rms_beamsizes": beam_sizes,
             "rmats": rmats,
             "design_twiss": design_twiss,
@@ -709,7 +707,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             "metadata": metadata,
         }
 
-        return MultiDeviceEmittanceResult(**results_dict)
+        return EmittanceMeasurementResult(**results_dict)
 
 
 def compute_emit_bmag_quad_scan(
