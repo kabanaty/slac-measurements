@@ -97,7 +97,7 @@ def get_optics_after_magnet(
         to_device=magnet.name,
     )
     after_quad_rmat = full_rmat @ np.linalg.inv(quad_rmat)
-    model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=False)
+    model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
     twiss = model_design.get_twiss(beam_profile_device.name)
     return {"after_quad_rmat": after_quad_rmat, "design_twiss": twiss}
 
