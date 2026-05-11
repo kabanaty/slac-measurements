@@ -9,10 +9,11 @@ from typing import Optional
 
 
 class TMITLoss(Measurement):
+    """Measures percentage beam intensity loss across a wire scanner."""
+
     name: str = "TMIT Loss"
     buffer: BSABuffer
     beampath: str
-    region: str
     beam_profile_device: Wire
 
     idx_before: Optional[list] = None
@@ -21,7 +22,10 @@ class TMITLoss(Measurement):
 
     @model_validator(mode="after")
     def run_setup(self) -> "TMITLoss":
+        """Load BPMs from beampath and resolve before/after wire indices."""
+
         def _build_bpm_lookup() -> dict:
+            """Instantiate all BPMs in the beampath, sorted by z-position."""
             beampath_obj = create_beampath(self.beampath)
             all_bpms = beampath_obj.bpms
             if not all_bpms:
@@ -29,22 +33,7 @@ class TMITLoss(Measurement):
             return dict(sorted(all_bpms.items(), key=lambda item: item[1].z_location))
 
         def _resolve_wire_bpms() -> tuple:
-            tmit_regions = {
-                "HTR",
-                "DIAG0",
-                "COL1",
-                "EMIT2",
-                "DOG",
-                "BYP",
-                "SPD",
-                "LTUS",
-            }
-            if self.region not in tmit_regions:
-                valid_regions_str = ", ".join(sorted(tmit_regions))
-                raise ValueError(
-                    f"Invalid region '{self.region}'. Must be one of {valid_regions_str}."
-                )
-
+            """Map wire metadata BPM names to row indices in the data array."""
             bpms_before = self.beam_profile_device.metadata.bpms_before_wire
             bpms_after = self.beam_profile_device.metadata.bpms_after_wire
 
@@ -63,10 +52,12 @@ class TMITLoss(Measurement):
         return self
 
     def measure(self):
+        """Acquire TMIT data and return percentage loss as a numpy array."""
         data = self.get_bpm_data()
         return self.calc_tmit_loss(data)
 
     def get_bpm_data(self) -> np.ndarray:
+        """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
         rows = []
         for bpm in self.bpms.values():
             bpm_data = collect_with_size_check(bpm, "tmit_buffer", self.buffer, None)
@@ -74,6 +65,7 @@ class TMITLoss(Measurement):
         return np.array(rows)
 
     def calc_tmit_loss(self, data: np.ndarray) -> np.ndarray:
+        """Normalize TMIT data and compute percentage loss between before/after wire BPMs."""
         row_medians = np.median(data, axis=1, keepdims=True)
         ironed = data / row_medians
 

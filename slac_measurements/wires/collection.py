@@ -120,7 +120,6 @@ class BaseWireMeasurementCollection(
                     buffer=self.my_buffer,
                     beam_profile_device=self.beam_profile_device,
                     beampath=self.beampath,
-                    region=self.beam_profile_device.area,
                 )
 
             create_by_prefix = {
