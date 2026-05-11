@@ -3,7 +3,7 @@ from slac_devices.reader import create_beampath
 from slac_devices.wire import Wire
 from slac_measurements.measurement import Measurement
 from slac_measurements.utils import collect_with_size_check
-from edef import BSABuffer
+from edef import BSABuffer, EventDefinition
 from pydantic import model_validator
 from typing import Optional
 
@@ -12,7 +12,7 @@ class TMITLoss(Measurement):
     """Measures percentage beam intensity loss across a wire scanner."""
 
     name: str = "TMIT Loss"
-    buffer: BSABuffer
+    buffer: BSABuffer | EventDefinition
     beampath: str
     beam_profile_device: Wire
 
