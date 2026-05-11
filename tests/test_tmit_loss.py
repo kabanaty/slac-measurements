@@ -26,10 +26,12 @@ def _make_mock_beampath(bpm_dict):
 
 
 def _make_wire(bpms_before, bpms_after):
-    """Create a Wire instance with metadata listing before/after BPM names."""
+    """Create a Wire instance with metadata listing upstream/downstream BPM names."""
+    tmitloss = MagicMock()
+    tmitloss.upstream = bpms_before
+    tmitloss.downstream = bpms_after
     metadata = MagicMock()
-    metadata.bpms_before_wire = bpms_before
-    metadata.bpms_after_wire = bpms_after
+    metadata.tmitloss = tmitloss
     wire = Wire.model_construct(metadata=metadata)
     return wire
 

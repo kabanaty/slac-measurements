@@ -16,8 +16,8 @@ class TMITLoss(Measurement):
     beampath: str
     beam_profile_device: Wire
 
-    idx_before: Optional[list] = None
-    idx_after: Optional[list] = None
+    idx_upstream: Optional[list] = None
+    idx_downstream: Optional[list] = None
     bpms: Optional[dict] = None
 
     @model_validator(mode="after")
@@ -34,21 +34,21 @@ class TMITLoss(Measurement):
 
         def _resolve_wire_bpms() -> tuple:
             """Map wire metadata BPM names to row indices in the data array."""
-            bpms_before = self.beam_profile_device.metadata.bpms_before_wire
-            bpms_after = self.beam_profile_device.metadata.bpms_after_wire
+            bpms_upstream = self.beam_profile_device.metadata.tmitloss.upstream
+            bpms_downstream = self.beam_profile_device.metadata.tmitloss.downstream
 
             bpm_names = list(self.bpms.keys())
-            idx_before = [
-                bpm_names.index(name) for name in bpms_before if name in self.bpms
+            idx_upstream = [
+                bpm_names.index(name) for name in bpms_upstream if name in self.bpms
             ]
-            idx_after = [
-                bpm_names.index(name) for name in bpms_after if name in self.bpms
+            idx_downstream = [
+                bpm_names.index(name) for name in bpms_downstream if name in self.bpms
             ]
 
-            return idx_before, idx_after
+            return idx_upstream, idx_downstream
 
         self.bpms = _build_bpm_lookup()
-        self.idx_before, self.idx_after = _resolve_wire_bpms()
+        self.idx_upstream, self.idx_downstream = _resolve_wire_bpms()
         return self
 
     def measure(self):
@@ -69,10 +69,10 @@ class TMITLoss(Measurement):
         row_medians = np.median(data, axis=1, keepdims=True)
         ironed = data / row_medians
 
-        mean_iron_before = ironed[self.idx_before].mean(axis=0)
-        normed = ironed / mean_iron_before
+        mean_iron_upstream = ironed[self.idx_upstream].mean(axis=0)
+        normed = ironed / mean_iron_upstream
 
-        mean_before = normed[self.idx_before].mean(axis=0)
-        mean_after = normed[self.idx_after].mean(axis=0)
+        mean_upstream = normed[self.idx_upstream].mean(axis=0)
+        mean_downstream = normed[self.idx_downstream].mean(axis=0)
 
-        return (mean_before - mean_after) * 100
+        return (mean_upstream - mean_downstream) * 100
