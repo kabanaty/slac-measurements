@@ -28,7 +28,7 @@ class TMITLoss(Measurement):
 
     def _build_bpm_state(self) -> tuple:
         """Instantiate BPMs from beampath and resolve upstream/downstream indices."""
-        beampath_obj = create_beampath(self.beampath)
+        beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
         all_bpms = beampath_obj.bpms
         if not all_bpms:
             raise LookupError("No BPMs found in beampath.")
