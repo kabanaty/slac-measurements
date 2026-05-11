@@ -1,6 +1,8 @@
 import gc
+from typing import Optional
 
 import numpy as np
+from pydantic import model_validator
 from slac_devices.reader import create_beampath
 from slac_devices.wire import Wire
 from slac_measurements.measurement import Measurement
@@ -16,39 +18,46 @@ class TMITLoss(Measurement):
     beampath: str
     beam_profile_device: Wire
 
-    def measure(self):
-        """Acquire TMIT data and return percentage loss as a numpy array."""
-        bpms, idx_upstream, idx_downstream = self._build_bpm_state()
-        try:
-            data = self._get_bpm_data(bpms)
-            return self._calc_tmit_loss(data, idx_upstream, idx_downstream)
-        finally:
-            del bpms
-            gc.collect()
+    bpms: Optional[dict] = None
+    idx_upstream: Optional[list] = None
+    idx_downstream: Optional[list] = None
 
-    def _build_bpm_state(self) -> tuple:
-        """Instantiate BPMs from beampath and resolve upstream/downstream indices."""
+    @model_validator(mode="after")
+    def _setup_bpms(self) -> "TMITLoss":
+        """Create BPMs at construction time so PVs can connect before measure()."""
         beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
         all_bpms = beampath_obj.bpms
         if not all_bpms:
             raise LookupError("No BPMs found in beampath.")
-        bpms = dict(sorted(all_bpms.items(), key=lambda item: item[1].z_location))
+        self.bpms = dict(sorted(all_bpms.items(), key=lambda item: item[1].z_location))
 
         bpms_upstream = self.beam_profile_device.metadata.tmitloss.upstream
         bpms_downstream = self.beam_profile_device.metadata.tmitloss.downstream
-        bpm_names = list(bpms.keys())
-        idx_upstream = [bpm_names.index(name) for name in bpms_upstream if name in bpms]
-        idx_downstream = [
-            bpm_names.index(name) for name in bpms_downstream if name in bpms
+        bpm_names = list(self.bpms.keys())
+        self.idx_upstream = [
+            bpm_names.index(name) for name in bpms_upstream if name in self.bpms
         ]
+        self.idx_downstream = [
+            bpm_names.index(name) for name in bpms_downstream if name in self.bpms
+        ]
+        return self
 
-        return bpms, idx_upstream, idx_downstream
+    def measure(self):
+        """Acquire TMIT data and return percentage loss as a numpy array."""
+        try:
+            data = self._get_bpm_data()
+            return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
+        finally:
+            self.bpms = None
+            self.idx_upstream = None
+            self.idx_downstream = None
+            gc.collect()
 
-    def _get_bpm_data(self, bpms: dict) -> np.ndarray:
+    def _get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
         rows = []
         n_samples = self.buffer.n_measurements
-        for name, bpm in bpms.items():
+        for name, bpm in self.bpms.items():
             try:
                 bpm_data = collect_with_size_check(
                     bpm, "tmit_buffer", self.buffer, None
