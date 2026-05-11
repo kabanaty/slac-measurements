@@ -59,20 +59,27 @@ class TMITLoss(Measurement):
     def get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
         rows = []
-        for bpm in self.bpms.values():
-            bpm_data = collect_with_size_check(bpm, "tmit_buffer", self.buffer, None)
+        n_samples = self.buffer.n_measurements
+        for name, bpm in self.bpms.items():
+            try:
+                bpm_data = collect_with_size_check(
+                    bpm, "tmit_buffer", self.buffer, None
+                )
+            except (TypeError, BufferError) as e:
+                print(f"Skipping BPM {name}: {e}")
+                bpm_data = np.full(n_samples, np.nan)
             rows.append(bpm_data)
         return np.array(rows)
 
     def calc_tmit_loss(self, data: np.ndarray) -> np.ndarray:
         """Normalize TMIT data and compute percentage loss between before/after wire BPMs."""
-        row_medians = np.median(data, axis=1, keepdims=True)
+        row_medians = np.nanmedian(data, axis=1, keepdims=True)
         ironed = data / row_medians
 
-        mean_iron_upstream = ironed[self.idx_upstream].mean(axis=0)
+        mean_iron_upstream = np.nanmean(ironed[self.idx_upstream], axis=0)
         normed = ironed / mean_iron_upstream
 
-        mean_upstream = normed[self.idx_upstream].mean(axis=0)
-        mean_downstream = normed[self.idx_downstream].mean(axis=0)
+        mean_upstream = np.nanmean(normed[self.idx_upstream], axis=0)
+        mean_downstream = np.nanmean(normed[self.idx_downstream], axis=0)
 
         return (mean_upstream - mean_downstream) * 100
