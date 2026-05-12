@@ -1,5 +1,6 @@
 from typing import Optional
 
+import epics
 import numpy as np
 from pydantic import model_validator
 from slac_devices.reader import create_beampath
@@ -20,6 +21,7 @@ class TMITLoss(Measurement):
     bpms: Optional[dict] = None
     idx_upstream: Optional[list] = None
     idx_downstream: Optional[list] = None
+    _hst_pvs: Optional[list] = None
 
     @model_validator(mode="after")
     def _setup_bpms(self) -> "TMITLoss":
@@ -39,6 +41,16 @@ class TMITLoss(Measurement):
         self.idx_downstream = [
             bpm_names.index(name) for name in bpms_downstream if name in self.bpms
         ]
+
+        self._hst_pvs = [
+            epics.PV(
+                self.buffer.buffer_pv(
+                    pv=bpm.controls_information.PVs.tmit.pvname, suffix="HST"
+                )
+            )
+            for bpm in self.bpms.values()
+        ]
+
         return self
 
     def measure(self):
