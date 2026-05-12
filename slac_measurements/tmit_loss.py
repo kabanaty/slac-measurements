@@ -24,7 +24,7 @@ class TMITLoss(Measurement):
     @model_validator(mode="after")
     def _setup_bpms(self) -> "TMITLoss":
         """Create BPMs at construction time so PVs can connect before measure()."""
-        beampath_obj = create_beampath(self.beampath)
+        beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
         all_bpms = beampath_obj.bpms
         if not all_bpms:
             raise LookupError("No BPMs found in beampath.")
