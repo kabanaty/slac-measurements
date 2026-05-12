@@ -58,12 +58,17 @@ class TMITLoss(Measurement):
         n_samples = self.buffer.n_measurements
         rows = []
         for name, data in zip(self.bpms.keys(), results):
-            if data is None:
-                print(f"Skipping BPM {name}: no buffer data")
-                data = np.full(n_samples, np.nan)
+            if data is None or len(data) < n_samples:
+                if data is not None:
+                    print(
+                        f"Skipping BPM {name}: incomplete data ({len(data)}/{n_samples})"
+                    )
+                else:
+                    print(f"Skipping BPM {name}: no buffer data")
+                row = np.full(n_samples, np.nan)
             else:
-                data = data[:n_samples]
-            rows.append(data)
+                row = np.asarray(data[:n_samples], dtype=float)
+            rows.append(row)
         return np.array(rows)
 
     @staticmethod
