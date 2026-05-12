@@ -1,4 +1,3 @@
-import gc
 from typing import Optional
 
 import numpy as np
@@ -44,14 +43,8 @@ class TMITLoss(Measurement):
 
     def measure(self):
         """Acquire TMIT data and return percentage loss as a numpy array."""
-        try:
-            data = self._get_bpm_data()
-            return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
-        finally:
-            self.bpms = None
-            self.idx_upstream = None
-            self.idx_downstream = None
-            gc.collect()
+        data = self._get_bpm_data()
+        return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
 
     def _get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
