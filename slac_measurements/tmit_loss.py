@@ -44,9 +44,7 @@ class TMITLoss(Measurement):
 
         self._hst_pvs = [
             epics.PV(
-                self.buffer.buffer_pv(
-                    pv=bpm.controls_information.PVs.tmit.pvname, suffix="HST"
-                )
+                f"{bpm.controls_information.PVs.tmit.pvname}HST{self.buffer.number}"
             )
             for bpm in self.bpms.values()
         ]
