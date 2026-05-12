@@ -5,7 +5,6 @@ from pydantic import model_validator
 from slac_devices.reader import create_beampath
 from slac_devices.wire import Wire
 from slac_measurements.measurement import Measurement
-from slac_measurements.utils import collect_with_size_check
 from edef import BSABuffer, EventDefinition
 
 
@@ -48,17 +47,20 @@ class TMITLoss(Measurement):
 
     def _get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
-        rows = []
+        pv_names = [
+            f"{bpm.controls_information.control_name}:TMIT"
+            for bpm in self.bpms.values()
+        ]
+        buff_data = self.buffer.get_buffer(pv_names)
+
         n_samples = self.buffer.n_measurements
-        for name, bpm in self.bpms.items():
-            try:
-                bpm_data = collect_with_size_check(
-                    bpm, "tmit_buffer", self.buffer, None
-                )
-            except (TypeError, BufferError) as e:
-                print(f"Skipping BPM {name}: {e}")
-                bpm_data = np.full(n_samples, np.nan)
-            rows.append(bpm_data)
+        rows = []
+        for name, pv_name in zip(self.bpms.keys(), pv_names):
+            data = buff_data.get(pv_name)
+            if data is None:
+                print(f"Skipping BPM {name}: no buffer data for {pv_name}")
+                data = np.full(n_samples, np.nan)
+            rows.append(data)
         return np.array(rows)
 
     @staticmethod
