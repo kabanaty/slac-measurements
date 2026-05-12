@@ -1,5 +1,6 @@
 from typing import Optional
 
+import epics
 import numpy as np
 from pydantic import model_validator
 from slac_devices.reader import create_beampath
@@ -51,15 +52,17 @@ class TMITLoss(Measurement):
             f"{bpm.controls_information.control_name}:TMIT"
             for bpm in self.bpms.values()
         ]
-        buff_data = self.buffer.get_buffer(pv_names)
+        hst_pvs = [f"{pv}HST{self.buffer.number}" for pv in pv_names]
+        results = epics.caget_many(hst_pvs)
 
         n_samples = self.buffer.n_measurements
         rows = []
-        for name, pv_name in zip(self.bpms.keys(), pv_names):
-            data = buff_data.get(pv_name)
+        for name, data in zip(self.bpms.keys(), results):
             if data is None:
-                print(f"Skipping BPM {name}: no buffer data for {pv_name}")
+                print(f"Skipping BPM {name}: no buffer data")
                 data = np.full(n_samples, np.nan)
+            else:
+                data = data[:n_samples]
             rows.append(data)
         return np.array(rows)
 
