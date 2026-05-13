@@ -19,10 +19,15 @@ def _make_mock_bpm(name, z_location, control_name):
     return bpm
 
 
-def _make_mock_beampath(bpm_dict):
-    """Create a mock Beampath with a .bpms property returning bpm_dict."""
+def _make_mock_beampath(bpm_dict, buffer_data=None):
+    """Create a mock Beampath with .bpms and .areas for get_buffer_data."""
     beampath = MagicMock()
     beampath.bpms = bpm_dict
+
+    area = MagicMock()
+    area.bpm_collection.get_buffer_data.return_value = buffer_data or {}
+    beampath.areas.values.return_value = [area]
+
     return beampath
 
 
@@ -179,15 +184,23 @@ class TestRunSetup(TestCase):
 class TestMeasure(TestCase):
     """Test the full measure pipeline with mocked data collection."""
 
-    @patch("slac_measurements.tmit_loss.epics.caget_many")
     @patch("slac_measurements.tmit_loss.create_beampath")
-    def test_measure_returns_numpy_array(self, mock_create_beampath, mock_caget_many):
+    def test_measure_returns_numpy_array(self, mock_create_beampath):
         bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
         bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
         bpm_c = _make_mock_bpm("BPM_C", z_location=3.0, control_name="BPMS:C")
         bpm_d = _make_mock_bpm("BPM_D", z_location=4.0, control_name="BPMS:D")
+
+        buffer_data = {
+            "BPM_A": np.array([2.0, 4.0]),
+            "BPM_B": np.array([2.0, 4.0]),
+            "BPM_C": np.array([2.0, 4.0]),
+            "BPM_D": np.array([2.0, 4.0]),
+        }
+
         mock_create_beampath.return_value = _make_mock_beampath(
-            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d}
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d},
+            buffer_data=buffer_data,
         )
 
         wire = _make_wire(
@@ -196,15 +209,7 @@ class TestMeasure(TestCase):
         )
 
         mock_buffer = MagicMock()
-        mock_buffer.number = 3
         mock_buffer.n_measurements = 2
-
-        mock_caget_many.return_value = [
-            np.array([2.0, 4.0]),
-            np.array([2.0, 4.0]),
-            np.array([2.0, 4.0]),
-            np.array([2.0, 4.0]),
-        ]
 
         instance = TMITLoss(
             buffer=mock_buffer,
@@ -217,15 +222,23 @@ class TestMeasure(TestCase):
         self.assertIsInstance(result, np.ndarray)
         np.testing.assert_allclose(result, [0.0, 0.0], atol=1e-10)
 
-    @patch("slac_measurements.tmit_loss.epics.caget_many")
     @patch("slac_measurements.tmit_loss.create_beampath")
-    def test_measure_with_loss(self, mock_create_beampath, mock_caget_many):
+    def test_measure_with_loss(self, mock_create_beampath):
         bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
         bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
         bpm_c = _make_mock_bpm("BPM_C", z_location=3.0, control_name="BPMS:C")
         bpm_d = _make_mock_bpm("BPM_D", z_location=4.0, control_name="BPMS:D")
+
+        buffer_data = {
+            "BPM_A": np.array([2.0, 4.0]),
+            "BPM_B": np.array([2.0, 4.0]),
+            "BPM_C": np.array([1.0, 4.0]),
+            "BPM_D": np.array([1.0, 4.0]),
+        }
+
         mock_create_beampath.return_value = _make_mock_beampath(
-            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d}
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d},
+            buffer_data=buffer_data,
         )
 
         wire = _make_wire(
@@ -234,15 +247,7 @@ class TestMeasure(TestCase):
         )
 
         mock_buffer = MagicMock()
-        mock_buffer.number = 3
         mock_buffer.n_measurements = 2
-
-        mock_caget_many.return_value = [
-            np.array([2.0, 4.0]),
-            np.array([2.0, 4.0]),
-            np.array([1.0, 4.0]),
-            np.array([1.0, 4.0]),
-        ]
 
         instance = TMITLoss(
             buffer=mock_buffer,
