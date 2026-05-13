@@ -24,7 +24,7 @@ class TMITLoss(Measurement):
 
     @model_validator(mode="after")
     def _setup_bpms(self) -> "TMITLoss":
-        """Create BPMs at construction time so PVs can connect before measure()."""
+        """Load BPMs from beampath and resolve upstream/downstream indices."""
         self._beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
         all_bpms = self._beampath_obj.bpms
         if not all_bpms:
@@ -71,7 +71,7 @@ class TMITLoss(Measurement):
     def _calc_tmit_loss(
         data: np.ndarray, idx_upstream: list, idx_downstream: list
     ) -> np.ndarray:
-        """Normalize TMIT data and compute percentage loss between before/after wire BPMs."""
+        """Normalize TMIT data and compute percentage loss between upstream/downstream BPMs."""
         row_medians = np.nanmedian(data, axis=1, keepdims=True)
         ironed = data / row_medians
 
