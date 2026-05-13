@@ -1,8 +1,8 @@
 from typing import Optional
 
-import epics
 import numpy as np
 from pydantic import model_validator
+from slac_devices.beampath import Beampath
 from slac_devices.reader import create_beampath
 from slac_devices.wire import Wire
 from slac_measurements.measurement import Measurement
@@ -17,6 +17,7 @@ class TMITLoss(Measurement):
     beampath: str
     beam_profile_device: Wire
 
+    _beampath_obj: Optional[Beampath] = None
     bpms: Optional[dict] = None
     idx_upstream: Optional[list] = None
     idx_downstream: Optional[list] = None
@@ -24,8 +25,8 @@ class TMITLoss(Measurement):
     @model_validator(mode="after")
     def _setup_bpms(self) -> "TMITLoss":
         """Create BPMs at construction time so PVs can connect before measure()."""
-        beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
-        all_bpms = beampath_obj.bpms
+        self._beampath_obj = create_beampath(self.beampath, device_types={"bpms"})
+        all_bpms = self._beampath_obj.bpms
         if not all_bpms:
             raise LookupError("No BPMs found in beampath.")
         self.bpms = dict(sorted(all_bpms.items(), key=lambda item: item[1].z_location))
@@ -48,27 +49,22 @@ class TMITLoss(Measurement):
 
     def _get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
-        pv_names = [
-            f"{bpm.controls_information.control_name}:TMIT"
-            for bpm in self.bpms.values()
-        ]
-        hst_pvs = [f"{pv}HST{self.buffer.number}" for pv in pv_names]
-        results = epics.caget_many(hst_pvs)
-
         n_samples = self.buffer.n_measurements
+        bpm_names = list(self.bpms.keys())
+
+        all_data = {}
+        for area in self._beampath_obj.areas.values():
+            if area.bpm_collection:
+                all_data.update(area.bpm_collection.get_buffer_data(self.buffer))
+
         rows = []
-        for name, data in zip(self.bpms.keys(), results):
-            if data is None or len(data) < n_samples:
-                if data is not None:
-                    print(
-                        f"Skipping BPM {name}: incomplete data ({len(data)}/{n_samples})"
-                    )
-                else:
-                    print(f"Skipping BPM {name}: no buffer data")
-                row = np.full(n_samples, np.nan)
+        for name in bpm_names:
+            data = all_data.get(name)
+            if data is None:
+                print(f"Skipping BPM {name}: no buffer data")
+                rows.append(np.full(n_samples, np.nan))
             else:
-                row = np.asarray(data[:n_samples], dtype=float)
-            rows.append(row)
+                rows.append(np.asarray(data, dtype=float))
         return np.array(rows)
 
     @staticmethod
