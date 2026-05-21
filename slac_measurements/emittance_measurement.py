@@ -16,6 +16,7 @@ from pydantic import (
 from slac_devices.magnet import Magnet
 from slac_measurements.emittance import compute_emit_bmag, normalize_emittance
 from slac_measurements.measurement import Measurement
+from slac_measurements.screen_profile import ScreenBeamProfileMeasurement
 from slac_measurements.utils import (
     NDArrayAnnotatedType,
 )
@@ -23,7 +24,7 @@ from slac_measurements.model_general_calcs import (
     build_quad_rmat,
     bdes_to_kmod,
     multi_device_optics,
-    get_rmat_after_magnet,
+    get_optics_after_magnet,
     quad_scan_optics,
 )
 import slac_measurements
@@ -85,14 +86,51 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     emittance: NDArrayAnnotatedType
     bmag: Optional[NDArrayAnnotatedType] = None
     twiss: NDArrayAnnotatedType
+    twiss_at_reconstruction: NDArrayAnnotatedType
+    rmats: Optional[NDArrayAnnotatedType] = None
+    design_twiss: Optional[NDArrayAnnotatedType] = None
     rms_beamsizes: NDArrayAnnotatedType
     beam_matrix: NDArrayAnnotatedType
+    energy: float
     metadata: SerializeAsAny[Any]
+
+class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
+    """
+    MultiDeviceEmittanceResult stores the results of an emittance measurement.
+
+    Attributes
+    ----------
+    beam_profile_devices_names: List[str]
+        Names of beam profile devices used for measurement
+    beam_profile_devices_z: List[float]
+        z locations of beam profile devices
+
+    Inherited Attributes
+    ----------
+    emittance : shape (2,)
+        The geometric emittance values for x/y in mm-mrad.
+    bmag : List[ndarray], Optional
+        The BMAG values for x/y for each quadrupole strength.
+    twiss : List[ndarray]
+        Twiss parameters (beta, alpha, gamma) calculated at the beam profile device
+        for each quadrupole strength in each plane.
+    rms_beamsizes : List[ndarray]
+        The RMS beam sizes for each quadrupole strength in each plane in meters.
+    beam_matrix : array, shape (2,3)
+        Reconstructed beam matrix at the entrance of the quadrupole for
+        both x/y directions. Elements correspond to (s11,s12,s22) of the beam matrix.
+    info : Any
+        Metadata information related to the measurement.
+
+    """
+
+    beam_profile_devices_names: List[str]
+    beam_profile_devices_z: List[float]
 
 
 class QuadScanEmittanceResult(EmittanceMeasurementResult):
     """
-    EmittanceMeasurementResult stores the results of an emittance measurement.
+    QuadScanEmittanceResult stores the results of an emittance measurement.
 
     Attributes
     ----------
@@ -225,7 +263,7 @@ class EmittanceMeasurementBase(Measurement):
     """
 
     energy: float
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 5.0
 
@@ -254,7 +292,7 @@ class EmittanceMeasurementBase(Measurement):
             beam_profiles, rmats, design_twiss, self.energy
         )
 
-        return self.construct_result(emittance_dict, beam_sizes)
+        return self.construct_result(emittance_dict, beam_sizes, rmats, design_twiss)
 
     @abstractmethod
     def retrieve_beam_profiles_and_optics(self):
@@ -384,6 +422,7 @@ class QuadScanEmittance(Measurement):
     _info: Optional[list] = []
 
     rmat: Optional[ndarray] = None
+    raw_rmats: Optional[NDArrayAnnotatedType] = None
     design_twiss: Optional[dict] = None  # design twiss values
     physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
@@ -411,12 +450,14 @@ class QuadScanEmittance(Measurement):
         """
 
         if self.manual_quad_rmats:
-            drift_rmat = get_rmat_after_magnet(
+            optics = get_optics_after_magnet(
                 self.magnet,
-                self.beamsize_measurement,
+                self.beamsize_measurement.beam_profile_device,
                 self.physics_model,
             )
-            self.rmat = np.stack([drift_rmat[0:2, 0:2], drift_rmat[2:4, 2:4]])
+            after_quad_rmat = optics["after_quad_rmat"]
+            self.rmat = np.stack([after_quad_rmat[0:2, 0:2], after_quad_rmat[2:4, 2:4]])
+            self.design_twiss = optics["design_twiss"]
 
         if self.rmat is None or self.rmat.size == 0:
             self.rmat_given = False
@@ -504,10 +545,15 @@ class QuadScanEmittance(Measurement):
 
                 # compute emittance and bmag
                 result = compute_emit_bmag(**emit_kwargs)
+                result["emittance"] = normalize_emittance(result["emittance"], self.energy)
 
-                result.update({"quadrupole_focusing_strengths": kmod_list[i]})
-                result.update({"quadrupole_pv_values": scan_values[i][idx]})
-                result.update({"rms_beamsizes": beam_sizes[i][idx]})
+                result.update(
+                    {
+                        "quadrupole_focusing_strengths": kmod_list[i],
+                        "quadrupole_pv_values": scan_values[i][idx],
+                        "rms_beamsizes": beam_sizes[i][idx] * 1e6,
+                    }
+                )
 
                 # add results to dict object
                 for name, value in result.items():
@@ -529,16 +575,21 @@ class QuadScanEmittance(Measurement):
             }
             # Call wrapper that takes quads in machine units and beamsize in meters
             results = compute_emit_bmag_quad_scan_machine_units(**inputs)
+        
+        metadata = self.model_dump()
+        if isinstance(self.beamsize_measurement, ScreenBeamProfileMeasurement):
+            metadata["resolution"] = self.beamsize_measurement.beam_profile_device.resolution
+            metadata["image_data"] = {
+                str(sval): ele.model_dump()
+                for sval, ele in zip(self.scan_values, self._info)
+            }
+
         results.update(
             {
-                "metadata": self.model_dump()
-                | {
-                    "resolution": self.beamsize_measurement.beam_profile_device.resolution,
-                    "image_data": {
-                        str(sval): ele.model_dump()
-                        for sval, ele in zip(self.scan_values, self._info)
-                    },
-                }
+                "metadata": metadata,
+                "rmats": np.array(self.raw_rmats),
+                "design_twiss": self.design_twiss,
+                "energy": self.energy,
             }
         )
 
@@ -564,7 +615,7 @@ class QuadScanEmittance(Measurement):
         if not self.rmat_given:
             optics = quad_scan_optics(
                 self.magnet,
-                self.beamsize_measurement,
+                self.beamsize_measurement.beam_profile_device,
                 self.physics_model,
             )
             rmat = optics["rmat"]
@@ -572,6 +623,9 @@ class QuadScanEmittance(Measurement):
             self.rmat.append(np.stack([rmat[0:2, 0:2], rmat[2:4, 2:4]]))
             if not self.design_twiss:
                 self.design_twiss = optics["design_twiss"]
+            if not self.rmats:
+                self.raw_rmats = []
+            self.raw_rmats.append(rmat)
 
     def _get_beamsizes_scan_values_from_info(self) -> ndarray:
         """
@@ -619,12 +673,14 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
         object attributes
 
         """
+        beam_profile_devices = []
         beam_profiles = []
         for beamsize_measurement in self.beamsize_measurements:
+            beam_profile_devices.append(beamsize_measurement.beam_profile_device)
             beam_profiles.append(beamsize_measurement.measure())
 
         optics = multi_device_optics(
-            self.beamsize_measurements,
+            beam_profile_devices,
             self.physics_model,
         )
 
@@ -633,7 +689,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
 
         return beam_profiles, rmats, design_twiss
 
-    def construct_result(self, emittance_dict, beam_sizes):
+    def construct_result(self, emittance_dict, beam_sizes, rmats, design_twiss):
         """
 
         Calculate the emittance from the measured beam sizes and quadrupole strengths.
@@ -644,9 +700,14 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             Object containing the results of the emittance measurement
 
         """
+        beam_profile_devices_names = [measurement.beam_profile_device.name for measurement in self.beamsize_measurements]
+        beam_profile_devices_z = [measurement.beam_profile_device.sum_l_meters for measurement in self.beamsize_measurements]
         metadata = self.model_dump()
         results_dict = emittance_dict | {
             "rms_beamsizes": beam_sizes,
+            "rmats": rmats,
+            "design_twiss": design_twiss,
+            "energy": self.energy,
             "metadata": metadata,
         }
 
@@ -815,6 +876,7 @@ def compute_emit_bmag_quad_scan_machine_units(
     # Prepare outputs
     results = {
         "emittance": [],
+        "twiss_at_reconstruction": [],
         "twiss": [],
         "beam_matrix": [],
         "bmag": [] if twiss_design is not None else None,
