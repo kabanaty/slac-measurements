@@ -226,8 +226,9 @@ class BaseWireMeasurementCollection(
             if buffer_method is None:
                 return device.measure()
 
-            method = getattr(device, buffer_method)
-            return method(self.buffer, retries=3, retry_delay=3.0)
+            return getattr(device, buffer_method)(
+                self.buffer, retries=3, retry_delay=3.0
+            )
 
         self.logger.info("Getting data from timing buffer ...")
         data = {name: _collect_device_data(name) for name in self.devices.keys()}
