@@ -88,7 +88,7 @@ def get_jitter_rmat(
     wire_name : str
         Wire device name (MAD element name).
     bpm_names : list[str]
-        BPM control names (e.g., ["BPMS:HTR:120", "BPMS:HTR:320"]).
+        BPM element names (MAD names, e.g., ["BPM10", "BPM11"]).
     beampath : str
         Beam path identifier for the model.
     physics_model : str
