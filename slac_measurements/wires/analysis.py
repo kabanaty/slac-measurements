@@ -89,6 +89,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             collection_result=self.collection_result,
             metadata=metadata,
             profiles=profile_measurements,
+            fitting_method=self.fitting_method,
             jitter_corrected=jitter_correction,
         )
 

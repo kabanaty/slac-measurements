@@ -48,12 +48,13 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     fit_result: dict[str, FitResult]
     collection_result: WireMeasurementCollectionResult
     profiles: dict[str, ProfileMeasurement]
+    fitting_method: str = "gaussian"
     jitter_corrected: bool = False
 
     def reanalyze(
         self,
         jitter_correction: bool = False,
-        fitting_method: str | None = None,
+        fitting_method: str = "gaussian",
         rms_detector: str | None = None,
         physics_model: str = "BLEM",
     ) -> "WireMeasurementAnalysisResult":
@@ -63,9 +64,8 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         ----------
         jitter_correction : bool
             If True, apply orbit-fit jitter correction.
-        fitting_method : str, optional
-            Override fitting method. If None, uses the same as the
-            original analysis.
+        fitting_method : str
+            Fitting method to use. Default "gaussian".
         rms_detector : str, optional
             Override detector for RMS sizes.
         physics_model : str
@@ -78,11 +78,9 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         """
         from slac_measurements.wires.analysis import WireMeasurementAnalysis
 
-        method = fitting_method if fitting_method is not None else "gaussian"
-
         analysis = WireMeasurementAnalysis(
             collection_result=self.collection_result,
-            fitting_method=method,
+            fitting_method=fitting_method,
         )
         return analysis.analyze(
             rms_detector=rms_detector,
@@ -104,6 +102,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             f"beampath='{meta.beampath}', "
             f"rms_sizes={rms_sizes_repr}, "
             f"rms_detector='{meta.rms_detector}', "
+            f"fitting_method='{self.fitting_method}', "
             f"jitter_corrected={self.jitter_corrected}, "
             f"profiles={profile_count}, "
             f"fit_profiles={fit_profile_count}, "
