@@ -50,44 +50,45 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     profiles: dict[str, ProfileMeasurement]
     jitter_corrected: bool = False
 
-    def set_rms_detector(self, detector: str | None = None) -> None:
-        """Mutate the result to use a different detector for RMS sizes.
+    def reanalyze(
+        self,
+        jitter_correction: bool = False,
+        fitting_method: str | None = None,
+        rms_detector: str | None = None,
+        physics_model: str = "BLEM",
+    ) -> "WireMeasurementAnalysisResult":
+        """Re-analyze the collected data with different settings.
 
         Parameters
         ----------
-        detector : str, optional
-            Detector name used to derive ``rms_sizes``. If omitted, the
-            metadata ``default_detector`` is used.
+        jitter_correction : bool
+            If True, apply orbit-fit jitter correction.
+        fitting_method : str, optional
+            Override fitting method. If None, uses the same as the
+            original analysis.
+        rms_detector : str, optional
+            Override detector for RMS sizes.
+        physics_model : str
+            Model source for R-matrix retrieval. Default "BLEM".
+
+        Returns
+        -------
+        WireMeasurementAnalysisResult
+            New analysis result from the same raw collection data.
         """
+        from slac_measurements.wires.analysis import WireMeasurementAnalysis
 
-        metadata = self.collection_result.metadata
-        selected_detector = metadata.default_detector if detector is None else detector
+        method = fitting_method if fitting_method is not None else "gaussian"
 
-        if selected_detector not in metadata.detectors:
-            raise ValueError(
-                f"Detector '{selected_detector}' is not available in "
-                f"metadata.detectors={metadata.detectors}."
-            )
-
-        x_rms = self._get_profile_rms(profile="x", detector=selected_detector)
-        y_rms = self._get_profile_rms(profile="y", detector=selected_detector)
-
-        self.rms_sizes = np.array([x_rms, y_rms], dtype=object)
-        self.metadata.rms_detector = selected_detector
-        self.collection_result.metadata.rms_detector = selected_detector
-
-    def _get_profile_rms(self, profile: str, detector: str) -> float | None:
-        """Return the RMS size for a profile/detector pair, if present."""
-        if profile not in self.fit_result:
-            return None
-
-        if detector not in self.fit_result[profile].detectors:
-            raise ValueError(
-                f"Detector '{detector}' is not available in fit_result "
-                f"for profile '{profile}'."
-            )
-
-        return self.fit_result[profile].detectors[detector].sigma
+        analysis = WireMeasurementAnalysis(
+            collection_result=self.collection_result,
+            fitting_method=method,
+        )
+        return analysis.analyze(
+            rms_detector=rms_detector,
+            jitter_correction=jitter_correction,
+            physics_model=physics_model,
+        )
 
     def __repr__(self) -> str:
         """Return a compact string representation of the analysis result."""
