@@ -2,7 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal
+
+from typing_extensions import Self
 
 from pydantic import model_validator
 from slac_devices.wire import Wire
