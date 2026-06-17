@@ -1,3 +1,4 @@
+import logging
 import time
 
 import slac_measurements.utils
@@ -7,113 +8,99 @@ from slac_measurements.wires.collection import BaseWireMeasurementCollection
 _WIRE_TOLERANCE = 250  # microns
 _WIRE_RETRACT_WAIT = 2  # seconds
 
+logger = logging.getLogger(__name__)
+
+
+def initialize_step_with_retry(device, logger=logger, max_attempts=3):
+    """Initialize wire for step scan mode with retries until enabled.
+
+    initialize is idempotent — skip if wire is already enabled.
+    """
+    if device.enabled:
+        logger.info("%s is already enabled.", device.name)
+        return
+
+    for attempt in range(1, max_attempts + 1):
+        logger.info(
+            "Initializing %s for step scan (Attempt %s/%s)...",
+            device.name,
+            attempt,
+            max_attempts,
+        )
+        device.initialize()
+
+        if slac_measurements.utils.wait_until(lambda: device.enabled):
+            logger.info("%s initialized (enabled is True).", device.name)
+            return
+
+        logger.warning("%s did not enable - retrying...", device.name)
+
+    raise RuntimeError(
+        f"Failed to initialize {device.name} after {max_attempts} attempts."
+    )
+
+
+def calculate_step_speed(device, position_index, positions):
+    """Return speed for a step position: max for inner, computed for outer."""
+    if position_index % 2 == 0:
+        return int(device.speed_max)
+
+    position_delta = positions[position_index] - positions[position_index - 1]
+    speed = (position_delta / device.scan_pulses) * device.beam_rate
+    return int(speed)
+
+
+def get_step_positions(device):
+    """Return sorted inner and outer positions for active profiles."""
+    positions = []
+    for profile in device.active_profiles():
+        for mode in ["inner", "outer"]:
+            positions.append(getattr(device, f"{profile}_wire_{mode}"))
+    return sorted(positions)
+
+
+def move_to_step_position(
+    device, logger=logger, *, position, position_index, total_positions, positions
+):
+    """Move wire to a step position and wait for arrival."""
+    logger.info(
+        "Moving wire to %s (step %s/%s)...",
+        position,
+        position_index + 1,
+        total_positions,
+    )
+
+    device.speed = calculate_step_speed(device, position_index, positions)
+    device.motor = position
+
+    if not slac_measurements.utils.wait_until(
+        lambda: abs(device.motor_rbv - position) < _WIRE_TOLERANCE,
+    ):
+        raise RuntimeError(
+            f"{device.name} did not reach position {position} after 10s."
+        )
+
 
 class StepWireMeasurementCollection(BaseWireMeasurementCollection):
     """Collect wire scan data using discrete step motion."""
 
     def _run_collection_scan(self) -> None:
         """Run a step scan: init wire, start buffer, move positions, retract, wait."""
-
-        def _calculate_step_speed(position_index: int, positions: list[int]) -> int:
-            """Return speed for a step position: max for inner, computed for outer."""
-
-            if position_index % 2 == 0:
-                return int(self.beam_profile_device.speed_max)
-
-            position_delta = positions[position_index] - positions[position_index - 1]
-            speed = (
-                position_delta / self.beam_profile_device.scan_pulses
-            ) * self.beam_profile_device.beam_rate
-            return int(speed)
-
-        def _get_step_positions() -> list[int]:
-            """Return sorted inner and outer positions for active profiles."""
-
-            positions = []
-            for profile in self.beam_profile_device.active_profiles():
-                for mode in ["inner", "outer"]:
-                    attr_name = f"{profile}_wire_{mode}"
-                    positions.append(getattr(self.beam_profile_device, attr_name))
-            return sorted(positions)
-
-        def _initialize_step_with_retry(max_attempts: int = 3) -> None:
-            """Initialize wire for step scan mode with retries until enabled."""
-
-            # initialize is idempotent — skip if wire is already enabled.
-            if self.beam_profile_device.enabled:
-                self.logger.info(
-                    "%s is already enabled.", self.beam_profile_device.name
-                )
-                return
-
-            for attempt in range(1, max_attempts + 1):
-                self.logger.info(
-                    "Initializing %s for step scan (Attempt %s/%s)...",
-                    self.beam_profile_device.name,
-                    attempt,
-                    max_attempts,
-                )
-                self.beam_profile_device.initialize()
-
-                if slac_measurements.utils.wait_until(
-                    lambda: self.beam_profile_device.enabled
-                ):
-                    self.logger.info(
-                        "%s initialized (enabled is True).",
-                        self.beam_profile_device.name,
-                    )
-                    return
-
-                self.logger.warning(
-                    "%s did not enable - retrying...", self.beam_profile_device.name
-                )
-
-            raise RuntimeError(
-                f"Failed to initialize {self.beam_profile_device.name} after {max_attempts} attempts."
-            )
-
-        def _move_to_step_position(
-            *,
-            position: int,
-            position_index: int,
-            total_positions: int,
-            positions: list[int],
-        ) -> None:
-            """Move wire to a step position and wait for arrival."""
-
-            self.logger.info(
-                "Moving wire to %s (step %s/%s)...",
-                position,
-                position_index + 1,
-                total_positions,
-            )
-
-            self.beam_profile_device.speed = _calculate_step_speed(
-                position_index, positions
-            )
-            self.beam_profile_device.motor = position
-
-            if not slac_measurements.utils.wait_until(
-                lambda: abs(self.beam_profile_device.motor_rbv - position)
-                < _WIRE_TOLERANCE,
-            ):
-                raise RuntimeError(
-                    f"{self.beam_profile_device.name} did not reach position {position} after 10s."
-                )
-
         self.logger.info("Performing step scan mode")
 
-        _initialize_step_with_retry()
+        initialize_step_with_retry(self.beam_profile_device, self.logger)
 
         self.logger.info("Starting buffer acquisition for step scan...")
         acquisition_start = time.monotonic()
         acquisition_timeout_s = self._calculate_acquisition_timeout_s()
         self.buffer.start()
 
-        positions = _get_step_positions()
+        positions = get_step_positions(self.beam_profile_device)
         total_positions = len(positions)
         for index, position in enumerate(positions):
-            _move_to_step_position(
+            move_to_step_position(
+                self.beam_profile_device,
+                self.logger,
                 position=position,
                 position_index=index,
                 total_positions=total_positions,

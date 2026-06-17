@@ -1,0 +1,99 @@
+"""Buffer-less step-scan motion test — validates motor travel at discrete positions."""
+
+import logging
+import time
+from datetime import datetime
+from threading import Thread
+
+import numpy as np
+
+from slac_devices.wire import Wire
+from .collection_results import (
+    MeasurementMetadata,
+    WireMeasurementCollectionResult,
+)
+from .motion_utils import poll_motor_rbv
+from .step_collection import (
+    _WIRE_RETRACT_WAIT,
+    get_step_positions,
+    initialize_step_with_retry,
+    move_to_step_position,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def run_step_motion_test(
+    device: Wire,
+) -> WireMeasurementCollectionResult:
+    """
+    Execute step-scan style wire motion without buffer and record motor RBV.
+
+    Moves the wire to each inner/outer position for all active profiles,
+    verifying that the motor reaches each target within tolerance before
+    advancing.
+
+    Parameters
+    ----------
+    device : Wire
+        Initialized wire device (from slac_devices.reader.create_wire).
+
+    Returns
+    -------
+    WireMeasurementCollectionResult
+        Position array in raw_data[device.name], metadata with scan ranges.
+    """
+    initialize_step_with_retry(device, logger)
+    positions = get_step_positions(device)
+
+    def motion_sequence():
+        _step_through_positions(device, positions)
+        time.sleep(_WIRE_RETRACT_WAIT)
+        device.retract()
+
+    motion_thread = Thread(target=motion_sequence)
+    motion_thread.start()
+    recorded = poll_motor_rbv(device)
+    motion_thread.join()
+
+    metadata = MeasurementMetadata(
+        wire_name=device.name,
+        area=device.area,
+        beampath="",
+        detectors=[],
+        default_detector="",
+        scan_ranges={
+            "x": tuple(device.x_range),
+            "y": tuple(device.y_range),
+            "u": tuple(device.u_range),
+        },
+        timestamp=datetime.now(),
+        active_profiles=device.active_profiles(),
+        install_angle=device.install_angle,
+        notes="beam-less step motion test",
+    )
+
+    return WireMeasurementCollectionResult(
+        raw_data={device.name: np.array(recorded)},
+        metadata=metadata,
+    )
+
+
+def _step_through_positions(
+    device: Wire,
+    positions: list[int],
+) -> None:
+    """Move to each position using the same motion as step collection."""
+    total = len(positions)
+
+    for i, target in enumerate(positions):
+        move_to_step_position(
+            device,
+            logger,
+            position=target,
+            position_index=i,
+            total_positions=total,
+            positions=positions,
+        )
+
+    logger.info("Step motion complete: %d positions", total)
