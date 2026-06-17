@@ -152,6 +152,11 @@ class BaseWireMeasurementCollection(
 
         for ds in self.beam_profile_device.metadata.detectors:
             name, area = ds.split(":")
+            if name.startswith("LBLM") and self.beampath.startswith("CU"):
+                self.logger.info(
+                    "Skipping LBLM detector '%s' (not installed on CU beampath).", name
+                )
+                continue
             detector = _instantiate_device(name, area)
             if detector is not None:
                 devices[name] = detector
@@ -307,7 +312,11 @@ class BaseWireMeasurementCollection(
 
         # Get list of detector names from wire metadata
         self.detectors = [
-            d.split(":")[0] for d in self.beam_profile_device.metadata.detectors
+            d.split(":")[0]
+            for d in self.beam_profile_device.metadata.detectors
+            if not (
+                d.split(":")[0].startswith("LBLM") and self.beampath.startswith("CU")
+            )
         ]
         return self
 
