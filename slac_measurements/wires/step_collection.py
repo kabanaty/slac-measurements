@@ -40,16 +40,6 @@ def initialize_step_with_retry(device, logger=logger, max_attempts=3):
     )
 
 
-def calculate_step_speed(device, position_index, positions):
-    """Return speed for a step position: max for inner, computed for outer."""
-    if position_index % 2 == 0:
-        return int(device.speed_max)
-
-    position_delta = positions[position_index] - positions[position_index - 1]
-    speed = (position_delta / device.scan_pulses) * device.beam_rate
-    return int(speed)
-
-
 def get_step_positions(device):
     """Return sorted inner and outer positions for active profiles."""
     positions = []
@@ -63,6 +53,14 @@ def move_to_step_position(
     device, logger=logger, *, position, position_index, total_positions, positions
 ):
     """Move wire to a step position and wait for arrival."""
+
+    def calculate_speed():
+        if position_index % 2 == 0:
+            return int(device.speed_max)
+        position_delta = positions[position_index] - positions[position_index - 1]
+        speed = (position_delta / device.scan_pulses) * device.beam_rate
+        return int(speed)
+
     logger.info(
         "Moving wire to %s (step %s/%s)...",
         position,
@@ -70,7 +68,7 @@ def move_to_step_position(
         total_positions,
     )
 
-    device.speed = calculate_step_speed(device, position_index, positions)
+    device.speed = calculate_speed()
     device.motor = position
 
     if not slac_measurements.utils.wait_until(
