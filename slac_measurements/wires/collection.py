@@ -99,6 +99,7 @@ class BaseWireMeasurementCollection(
             self.metadata.timestamp = datetime.now()
         finally:
             _release_buffer_safely()
+            self._disconnect_devices()
 
         return WireMeasurementCollectionResult(
             raw_data=self.data,
@@ -279,6 +280,18 @@ class BaseWireMeasurementCollection(
             min_expected_s * _ACQUISITION_TIMEOUT_MARGIN,
             min_expected_s + _ACQUISITION_TIMEOUT_MIN_EXTRA_S,
         )
+
+    def _disconnect_devices(self) -> None:
+        """Disconnect PV connections from per-scan devices (detectors, BPMs)."""
+        if self.devices is None:
+            return
+        for name, device in self.devices.items():
+            if name == self.beam_profile_device.name:
+                continue
+            if hasattr(device, "disconnect"):
+                device.disconnect()
+            elif hasattr(device, "controls_information"):
+                device.controls_information.PVs.disconnect()
 
     @abstractmethod
     def _run_collection_scan(self) -> None:

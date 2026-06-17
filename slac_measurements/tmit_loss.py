@@ -47,6 +47,14 @@ class TMITLoss(Measurement):
         data = self._get_bpm_data()
         return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
 
+    def disconnect(self):
+        """Disconnect all BPM PV connections held by this measurement."""
+        if self.bpms is None:
+            return
+        for bpm in self.bpms.values():
+            if hasattr(bpm, "controls_information"):
+                bpm.controls_information.PVs.disconnect()
+
     def _get_bpm_data(self) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
         n_samples = self.buffer.n_measurements
