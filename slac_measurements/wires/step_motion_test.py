@@ -70,7 +70,7 @@ def run_step_motion_test(
         timestamp=datetime.now(),
         active_profiles=device.active_profiles(),
         install_angle=device.install_angle,
-        notes="beam-less step motion test",
+        notes="buffer-less step motion test",
     )
 
     return WireMeasurementCollectionResult(
