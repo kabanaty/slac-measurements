@@ -1,4 +1,4 @@
-"""Buffer-less wire motion test — validates motor travel by polling RBV."""
+"""Buffer-less OTF collection — validates motor travel by polling RBV."""
 
 import logging
 from datetime import datetime
@@ -6,17 +6,17 @@ from datetime import datetime
 import numpy as np
 
 from slac_devices.wire import Wire
-from .collection_results import (
+from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
-from .motion_utils import POLL_INTERVAL_S, poll_motor_rbv
-from .otf_collection import initialize_otf_with_retry
+from slac_measurements.wires.motion.otf import initialize_otf_with_retry
+from slac_measurements.wires.motion.utils import POLL_INTERVAL_S, poll_motor_rbv
 
 logger = logging.getLogger(__name__)
 
 
-def run_otf_motion_test(
+def run_unbuffered_otf_scan(
     device: Wire,
     poll_interval_s: float = POLL_INTERVAL_S,
 ) -> WireMeasurementCollectionResult:

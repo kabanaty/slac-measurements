@@ -1,4 +1,4 @@
-"""Buffer-less step-scan motion test — validates motor travel at discrete positions."""
+"""Buffer-less step-scan collection — validates motor travel at discrete positions."""
 
 import logging
 import time
@@ -8,22 +8,22 @@ from threading import Thread
 import numpy as np
 
 from slac_devices.wire import Wire
-from .collection_results import (
+from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
-from .motion_utils import poll_motor_rbv
-from .step_collection import (
+from slac_measurements.wires.motion.step import (
     _WIRE_RETRACT_WAIT,
     get_step_positions,
     initialize_step_with_retry,
     move_to_step_position,
 )
+from slac_measurements.wires.motion.utils import poll_motor_rbv
 
 logger = logging.getLogger(__name__)
 
 
-def run_step_motion_test(
+def run_unbuffered_step_scan(
     device: Wire,
 ) -> WireMeasurementCollectionResult:
     """
@@ -70,7 +70,7 @@ def run_step_motion_test(
         timestamp=datetime.now(),
         active_profiles=device.active_profiles(),
         install_angle=device.install_angle,
-        notes="buffer-less step motion test",
+        notes="beam-less step motion test",
     )
 
     return WireMeasurementCollectionResult(

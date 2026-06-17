@@ -1,42 +1,9 @@
-import logging
+"""OTF wire collection: buffered data acquisition with continuous motion."""
+
 import time
 
-import slac_measurements.utils
-
-from slac_measurements.wires.collection import BaseWireMeasurementCollection
-
-logger = logging.getLogger(__name__)
-
-
-def initialize_otf_with_retry(device, logger=logger, max_attempts=3):
-    """Start OTF scan and retry until wire is homed and on status.
-
-    start_scan must always be called to arm the wire for OTF motion,
-    even if homed/on_status are already True from a prior run.
-    """
-    for attempt in range(1, max_attempts + 1):
-        logger.info(
-            "Starting OTF scan on %s (Attempt %s/%s)...",
-            device.name,
-            attempt,
-            max_attempts,
-        )
-        device.start_scan()
-
-        if slac_measurements.utils.wait_until(
-            lambda: device.homed and device.on_status
-        ):
-            logger.info("%s is homed and on.", device.name)
-            return
-
-        logger.warning(
-            "%s did not become homed and on - retrying...",
-            device.name,
-        )
-
-    raise RuntimeError(
-        f"Failed to initialize {device.name} after {max_attempts} attempts."
-    )
+from slac_measurements.wires.collection.base import BaseWireMeasurementCollection
+from slac_measurements.wires.motion.otf import initialize_otf_with_retry
 
 
 class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
