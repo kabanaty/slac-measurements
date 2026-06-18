@@ -152,14 +152,13 @@ class BaseWireMeasurementCollection(
 
         for ds in self.beam_profile_device.metadata.detectors:
             name, area = ds.split(":")
-            if name.startswith("LBLM") and self.beampath.startswith("CU"):
-                self.logger.info(
-                    "Skipping LBLM detector '%s' (not installed on CU beampath).", name
-                )
-                continue
             detector = _instantiate_device(name, area)
             if detector is not None:
                 devices[name] = detector
+
+        self.detectors = [
+            name for name in devices if name != self.beam_profile_device.name
+        ]
 
         # Add jitter correction BPMs if defined
         jitter_bpm_names = self.beam_profile_device.metadata.jitter_bpms
@@ -169,7 +168,6 @@ class BaseWireMeasurementCollection(
                 bpm = _instantiate_device(name, area)
                 if bpm is not None:
                     devices[name] = bpm
-
         self.logger.info("Device dictionary built.")
         return devices
 
@@ -310,13 +308,9 @@ class BaseWireMeasurementCollection(
         )
         self.logger.propagate = False
 
-        # Get list of detector names from wire metadata
+        # Initial detector list from metadata; refined after device instantiation
         self.detectors = [
-            d.split(":")[0]
-            for d in self.beam_profile_device.metadata.detectors
-            if not (
-                d.split(":")[0].startswith("LBLM") and self.beampath.startswith("CU")
-            )
+            d.split(":")[0] for d in self.beam_profile_device.metadata.detectors
         ]
         return self
 
