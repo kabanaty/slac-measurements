@@ -76,7 +76,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         WireMeasurementAnalysisResult
             New analysis result from the same raw collection data.
         """
-        from slac_measurements.wires.analysis.analysis import WireMeasurementAnalysis
+        from slac_measurements.wires.analysis import WireMeasurementAnalysis
 
         analysis = WireMeasurementAnalysis(
             collection_result=self.collection_result,
