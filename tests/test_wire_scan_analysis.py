@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from slac_measurements.wires.analysis import WireMeasurementAnalysis
-from slac_measurements.wires.analysis_results import (
+from slac_measurements.wires.analysis.results import (
     DetectorFit,
     DetectorProfileMeasurement,
     FitResult,
