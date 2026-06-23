@@ -13,7 +13,7 @@ from slac_measurements.wires.analysis.results import (
     WireMeasurementAnalysisResult,
     load_from_h5,
 )
-from slac_measurements.wires.collection_results import (
+from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
