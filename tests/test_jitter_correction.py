@@ -159,7 +159,7 @@ class ComputeOrbitFitTest(TestCase):
 
 
 class GetJitterRmatTest(TestCase):
-    @patch("slac_measurements.wires.analysis.jitter_correction.Model")
+    @patch("meme.model.Model")
     def test_extracts_correct_rmat_elements(self, mock_model_cls):
         rmat_6x6 = np.zeros((6, 6))
         rmat_6x6[0, 0] = 1.1  # R11
