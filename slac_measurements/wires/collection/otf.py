@@ -9,9 +9,6 @@ from slac_measurements.wires.motion.otf import initialize_otf_with_retry
 class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
     """Collect wire scan data using on-the-fly wire motion."""
 
-    def _initialize_otf_with_retry(self, max_attempts: int = 3) -> None:
-        initialize_otf_with_retry(self.beam_profile_device, self.logger, max_attempts)
-
     def _run_collection_scan(self) -> None:
         """Run an OTF scan: init wire, start buffer."""
 
@@ -46,5 +43,5 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
             )
 
         self.logger.info("Performing on-the-fly scan mode")
-        self._initialize_otf_with_retry()
+        initialize_otf_with_retry(self.beam_profile_device, self.logger, max_attempts=3)
         _start_timing_buffer()

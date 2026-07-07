@@ -59,9 +59,9 @@ def run_unbuffered_step_scan(
     metadata = MeasurementMetadata(
         wire_name=device.name,
         area=device.area,
-        beampath="",
-        detectors=[],
-        default_detector="",
+        beampath=None,
+        detectors=None,
+        default_detector=None,
         scan_ranges={
             "x": tuple(device.x_range),
             "y": tuple(device.y_range),
