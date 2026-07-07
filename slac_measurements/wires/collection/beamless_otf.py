@@ -16,7 +16,7 @@ from slac_measurements.wires.motion.utils import POLL_INTERVAL_S, poll_motor_rbv
 logger = logging.getLogger(__name__)
 
 
-def run_unbuffered_otf_scan(
+def run_beamless_otf_scan(
     device: Wire,
     poll_interval_s: float = POLL_INTERVAL_S,
 ) -> WireMeasurementCollectionResult:
@@ -52,7 +52,7 @@ def run_unbuffered_otf_scan(
         timestamp=datetime.now(),
         active_profiles=device.active_profiles(),
         install_angle=device.install_angle,
-        notes="buffer-less otf motion test",
+        notes="beamless otf motion test",
     )
 
     return WireMeasurementCollectionResult(

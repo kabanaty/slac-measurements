@@ -23,7 +23,7 @@ from slac_measurements.wires.motion.utils import poll_motor_rbv
 logger = logging.getLogger(__name__)
 
 
-def run_unbuffered_step_scan(
+def run_beamless_step_scan(
     device: Wire,
 ) -> WireMeasurementCollectionResult:
     """
@@ -70,7 +70,7 @@ def run_unbuffered_step_scan(
         timestamp=datetime.now(),
         active_profiles=device.active_profiles(),
         install_angle=device.install_angle,
-        notes="beam-less step motion test",
+        notes="beamless step motion test",
     )
 
     return WireMeasurementCollectionResult(
