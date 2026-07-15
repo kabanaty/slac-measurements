@@ -22,6 +22,8 @@ from slac_measurements.wires.motion.utils import poll_motor_rbv
 
 logger = logging.getLogger(__name__)
 
+STEP_SCAN_TIMEOUT = 60
+
 
 def run_beamless_step_scan(
     device: Wire,
@@ -51,10 +53,21 @@ def run_beamless_step_scan(
         time.sleep(_WIRE_RETRACT_WAIT)
         device.retract()
 
-    motion_thread = Thread(target=motion_sequence)
-    motion_thread.start()
-    recorded = poll_motor_rbv(device)
-    motion_thread.join()
+    recorded = None
+
+    def capture_poll():
+        nonlocal recorded
+        recorded = poll_motor_rbv(device)
+
+    poll_thread = Thread(target=capture_poll)
+    motion_sequence()
+    poll_thread.start()
+    poll_thread.join(timeout=STEP_SCAN_TIMEOUT)
+
+    if poll_thread.is_alive():
+        logger.warning(
+            "Poll thread did not finish within %ds timeout", STEP_SCAN_TIMEOUT
+        )
 
     metadata = MeasurementMetadata(
         wire_name=device.name,
