@@ -12,9 +12,9 @@ class MeasurementMetadata(BaseModel):
     wire_name: str
     buffer_number: int | None = None
     area: str
-    beampath: str
-    detectors: list[str]
-    default_detector: str
+    beampath: str | None = None
+    detectors: list[str] | None = None
+    default_detector: str | None = None
     rms_detector: str | None = None
     scan_ranges: dict[str, tuple[int, int]]
     timestamp: datetime | None = None
