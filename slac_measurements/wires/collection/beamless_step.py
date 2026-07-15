@@ -65,8 +65,8 @@ def run_beamless_step_scan(
     poll_thread.join(timeout=STEP_SCAN_TIMEOUT)
 
     if poll_thread.is_alive():
-        logger.warning(
-            "Poll thread did not finish within %ds timeout", STEP_SCAN_TIMEOUT
+        raise TimeoutError(
+            f"Poll thread did not finish within {STEP_SCAN_TIMEOUT}s timeout"
         )
 
     metadata = MeasurementMetadata(
