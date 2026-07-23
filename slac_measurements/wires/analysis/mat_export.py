@@ -114,11 +114,11 @@ def analysis_result_to_mat(
     wire_key = metadata.wire_name
     if wire_key in raw_data:
         wire_arr = np.asarray(raw_data[wire_key], dtype=np.float64)
-        data["wireData"] = wire_arr.reshape(1, -1, 1)
+        data["wireData"] = wire_arr.reshape(1, -1)
         data["wireMask"] = np.ones_like(data["wireData"], dtype=np.float64)
     else:
-        data["wireData"] = np.zeros((1, 0, 1), dtype=np.float64)
-        data["wireMask"] = np.zeros((1, 0, 1), dtype=np.float64)
+        data["wireData"] = np.zeros((1, 0), dtype=np.float64)
+        data["wireMask"] = np.zeros((1, 0), dtype=np.float64)
 
     n_pulses = data["wireData"].shape[1]
 
@@ -127,9 +127,9 @@ def analysis_result_to_mat(
         for key in pmt_keys:
             arr = np.asarray(raw_data.get(key, np.zeros(n_pulses)), dtype=np.float64)
             pmt_arrays.append(arr.ravel())
-        data["PMTData"] = np.array(pmt_arrays).reshape(len(pmt_keys), n_pulses, 1)
+        data["PMTData"] = np.array(pmt_arrays).reshape(len(pmt_keys), n_pulses)
     else:
-        data["PMTData"] = np.zeros((0, n_pulses, 1), dtype=np.float64)
+        data["PMTData"] = np.zeros((1, n_pulses), dtype=np.float64)
 
     if bpm_keys:
         bpmx_arrays = []
@@ -150,11 +150,11 @@ def analysis_result_to_mat(
             else:
                 bpmx_arrays.append(np.zeros(n_pulses, dtype=np.float64))
                 bpmy_arrays.append(np.zeros(n_pulses, dtype=np.float64))
-        data["BPMXData"] = np.array(bpmx_arrays).reshape(len(bpm_keys), n_pulses, 1)
-        data["BPMYData"] = np.array(bpmy_arrays).reshape(len(bpm_keys), n_pulses, 1)
+        data["BPMXData"] = np.array(bpmx_arrays).reshape(len(bpm_keys), n_pulses)
+        data["BPMYData"] = np.array(bpmy_arrays).reshape(len(bpm_keys), n_pulses)
     else:
-        data["BPMXData"] = np.zeros((0, n_pulses, 1), dtype=np.float64)
-        data["BPMYData"] = np.zeros((0, n_pulses, 1), dtype=np.float64)
+        data["BPMXData"] = np.zeros((0, n_pulses), dtype=np.float64)
+        data["BPMYData"] = np.zeros((0, n_pulses), dtype=np.float64)
 
     if toro_keys:
         toro_arrays = []
@@ -164,9 +164,20 @@ def analysis_result_to_mat(
                     raw_data.get(key, np.zeros(n_pulses)), dtype=np.float64
                 ).ravel()
             )
-        data["toroData"] = np.array(toro_arrays).reshape(len(toro_keys), n_pulses, 1)
+        data["toroData"] = np.array(toro_arrays).reshape(len(toro_keys), n_pulses)
     else:
-        data["toroData"] = np.zeros((0, n_pulses, 1), dtype=np.float64)
+        # GUI always expects at least one toroid row
+        area = metadata.area or "LI21"
+        toro_keys = [f"TORO:{area}:1"]
+        data["toroList"] = np.array(toro_keys, dtype=object)
+        data["toroData"] = np.ones((1, n_pulses), dtype=np.float64) * 1e9
+
+    data["selectToro"] = np.float64(1.0)
+    data["selectBPM"] = (
+        np.ones((1, len(bpm_keys)), dtype=np.float64)
+        if bpm_keys
+        else np.zeros((1, 0), dtype=np.float64)
+    )
 
     # --- R-matrices (optional) ---
     if include_rmat and bpm_keys:

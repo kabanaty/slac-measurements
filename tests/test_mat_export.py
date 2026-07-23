@@ -233,9 +233,8 @@ class TestAnalysisResultToMat(TestCase):
         mat = self._export_and_load()
         data = self._data(mat)
         wire_data = np.asarray(data["wireData"])
-        self.assertEqual(wire_data.ndim, 3)
+        self.assertEqual(wire_data.ndim, 2)
         self.assertEqual(wire_data.shape[0], 1)
-        self.assertEqual(wire_data.shape[2], 1)
         self.assertEqual(wire_data.shape[1], 50)
 
         pmt_data = np.asarray(data["PMTData"])
