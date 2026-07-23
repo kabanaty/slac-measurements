@@ -26,10 +26,29 @@ def datetime_to_matlab_datenum(dt: datetime) -> float:
     return MATLAB_EPOCH_OFFSET + (dt - epoch).total_seconds() / 86400.0
 
 
+def _build_name_map_from_db(mad_names: list[str]) -> dict[str, str]:
+    """Attempt to build MAD→EPICS name map using slac_db."""
+    try:
+        import slac_db.device
+
+        name_map = {}
+        for mad_name in mad_names:
+            try:
+                epics_name = slac_db.device.get_attribute(mad_name, "cs_name")
+                if epics_name:
+                    name_map[mad_name] = epics_name
+            except Exception:
+                pass
+        return name_map
+    except ImportError:
+        return {}
+
+
 def analysis_result_to_mat(
     result: WireMeasurementAnalysisResult,
     filepath: str,
     *,
+    name_map: dict[str, str] | None = None,
     include_rmat: bool = False,
     physics_model: str = "BLEM",
 ) -> str:
@@ -45,6 +64,12 @@ def analysis_result_to_mat(
         The analysis result to export.
     filepath : str
         Output ``.mat`` file path.
+    name_map : dict[str, str], optional
+        Mapping from MAD names (as stored in the Python result) to EPICS
+        names (as expected by MATLAB).  E.g.
+        ``{"WS28744": "WIRE:LI28:744", "PMT29150": "PMT:LI29:150"}``.
+        If None, attempts to look up names via ``slac_db`` (requires DB
+        access); falls back to using MAD names unchanged.
     include_rmat : bool
         Whether to fetch R-matrices from the optics model.  Requires
         network access.  Default False.
@@ -61,11 +86,23 @@ def analysis_result_to_mat(
     metadata = result.collection_result.metadata
     raw_data = result.collection_result.raw_data
 
+    # Build or auto-detect MAD→EPICS name map
+    if name_map is None:
+        all_mad_names = [metadata.wire_name]
+        if metadata.detectors:
+            all_mad_names.extend(metadata.detectors)
+        all_mad_names.extend(k for k in raw_data.keys() if k != metadata.wire_name)
+        name_map = _build_name_map_from_db(all_mad_names)
+
+    def _epics(mad_name: str) -> str:
+        return name_map.get(mad_name, mad_name)
+
     data: dict[str, Any] = {}
 
     # --- Scalar / string fields ---
-    data["name"] = metadata.wire_name
-    data["wireName"] = metadata.wire_name
+    wire_epics = _epics(metadata.wire_name)
+    data["name"] = wire_epics
+    data["wireName"] = wire_epics
     data["wireMode"] = "wire"
     data["beampath"] = metadata.beampath or ""
     data["status"] = np.bool_(True)
@@ -101,14 +138,18 @@ def analysis_result_to_mat(
     # --- Device lists and raw data ---
     pmt_keys, bpm_keys, toro_keys = _classify_raw_data_keys(raw_data, metadata)
 
+    pmt_epics = [_epics(k) for k in pmt_keys]
+    bpm_epics = [_epics(k) for k in bpm_keys]
+    toro_epics = [_epics(k) for k in toro_keys]
+
     data["PMTList"] = (
-        np.array(pmt_keys, dtype=object) if pmt_keys else np.array([], dtype=object)
+        np.array(pmt_epics, dtype=object) if pmt_epics else np.array([], dtype=object)
     )
     data["BPMList"] = (
-        np.array(bpm_keys, dtype=object) if bpm_keys else np.array([], dtype=object)
+        np.array(bpm_epics, dtype=object) if bpm_epics else np.array([], dtype=object)
     )
     data["toroList"] = (
-        np.array(toro_keys, dtype=object) if toro_keys else np.array([], dtype=object)
+        np.array(toro_epics, dtype=object) if toro_epics else np.array([], dtype=object)
     )
 
     wire_key = metadata.wire_name
@@ -229,7 +270,7 @@ def analysis_result_to_mat(
     data["beam"] = _build_beam_struct(result, pos, signal)
 
     # --- beamPV ---
-    data["beamPV"] = _build_beam_pv(metadata.wire_name, data["beam"])
+    data["beamPV"] = _build_beam_pv(wire_epics, data["beam"])
 
     scipy.io.savemat(filepath, {"data": data}, do_compression=True, oned_as="row")
     return filepath
