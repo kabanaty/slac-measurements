@@ -177,12 +177,12 @@ def analysis_result_to_mat(
         # signal at duplicate positions — matches what Python analysis does.
         unique_pos, inverse = np.unique(wire_arr, return_inverse=True)
         data["wireData"] = unique_pos.reshape(1, -1)
-        data["wireMask"] = np.ones_like(data["wireData"], dtype=np.float64)
+        data["wireMask"] = np.ones_like(data["wireData"], dtype=np.bool_)
     else:
         unique_pos = np.zeros(0, dtype=np.float64)
         inverse = np.array([], dtype=int)
         data["wireData"] = np.zeros((1, 0), dtype=np.float64)
-        data["wireMask"] = np.zeros((1, 0), dtype=np.float64)
+        data["wireMask"] = np.zeros((1, 0), dtype=np.bool_)
 
     n_pulses = data["wireData"].shape[1]
 
