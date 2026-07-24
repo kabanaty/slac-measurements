@@ -28,20 +28,36 @@ def datetime_to_matlab_datenum(dt: datetime) -> float:
 
 def _build_name_map_from_db(mad_names: list[str]) -> dict[str, str]:
     """Attempt to build MAD→EPICS name map using slac_db."""
+    import warnings
+
     try:
         import slac_db.device
-
-        name_map = {}
-        for mad_name in mad_names:
-            try:
-                epics_name = slac_db.device.get_attribute(mad_name, "cs_name")
-                if epics_name:
-                    name_map[mad_name] = epics_name
-            except Exception:
-                pass
-        return name_map
     except ImportError:
+        warnings.warn(
+            "slac_db not available; MAD names will not be converted to EPICS. "
+            "Pass name_map explicitly to to_mat().",
+            stacklevel=3,
+        )
         return {}
+
+    name_map = {}
+    for mad_name in mad_names:
+        try:
+            epics_name = slac_db.device.get_attribute(mad_name, "cs_name")
+            if epics_name:
+                name_map[mad_name] = epics_name
+        except Exception as exc:
+            warnings.warn(
+                f"Failed to look up EPICS name for '{mad_name}': {exc}",
+                stacklevel=3,
+            )
+    if not name_map:
+        warnings.warn(
+            "slac_db lookup returned no EPICS names. "
+            "Pass name_map explicitly to to_mat().",
+            stacklevel=3,
+        )
+    return name_map
 
 
 def analysis_result_to_mat(
