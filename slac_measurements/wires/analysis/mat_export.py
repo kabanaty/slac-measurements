@@ -168,12 +168,19 @@ def analysis_result_to_mat(
         np.array(toro_epics, dtype=object) if toro_epics else np.array([], dtype=object)
     )
 
+    # Use the longest active profile to determine n_pulses for raw arrays.
+    # Export unique positions so MATLAB's reprocessing (interp1) won't fail.
     wire_key = metadata.wire_name
     if wire_key in raw_data:
         wire_arr = np.asarray(raw_data[wire_key], dtype=np.float64)
-        data["wireData"] = wire_arr.reshape(1, -1)
+        # Deduplicate: keep only unique positions (sorted), averaging
+        # signal at duplicate positions — matches what Python analysis does.
+        unique_pos, inverse = np.unique(wire_arr, return_inverse=True)
+        data["wireData"] = unique_pos.reshape(1, -1)
         data["wireMask"] = np.ones_like(data["wireData"], dtype=np.float64)
     else:
+        unique_pos = np.zeros(0, dtype=np.float64)
+        inverse = np.array([], dtype=int)
         data["wireData"] = np.zeros((1, 0), dtype=np.float64)
         data["wireMask"] = np.zeros((1, 0), dtype=np.float64)
 
@@ -182,11 +189,35 @@ def analysis_result_to_mat(
     if pmt_keys:
         pmt_arrays = []
         for key in pmt_keys:
-            arr = np.asarray(raw_data.get(key, np.zeros(n_pulses)), dtype=np.float64)
-            pmt_arrays.append(arr.ravel())
+            arr = np.asarray(
+                raw_data.get(key, np.zeros(len(inverse))), dtype=np.float64
+            ).ravel()
+            if len(inverse) > 0 and len(arr) == len(inverse):
+                # Average signal at duplicate positions
+                deduped = np.zeros(n_pulses, dtype=np.float64)
+                counts = np.zeros(n_pulses, dtype=np.float64)
+                np.add.at(deduped, inverse, arr)
+                np.add.at(counts, inverse, 1.0)
+                counts[counts == 0] = 1.0
+                pmt_arrays.append(deduped / counts)
+            else:
+                pmt_arrays.append(
+                    arr[:n_pulses] if len(arr) >= n_pulses else np.zeros(n_pulses)
+                )
         data["PMTData"] = np.array(pmt_arrays).reshape(len(pmt_keys), n_pulses)
     else:
         data["PMTData"] = np.zeros((1, n_pulses), dtype=np.float64)
+
+    def _dedup_array(arr_raw, inv, n_out):
+        """Average raw array values at duplicate wire positions."""
+        if len(inv) > 0 and len(arr_raw) == len(inv):
+            deduped = np.zeros(n_out, dtype=np.float64)
+            counts = np.zeros(n_out, dtype=np.float64)
+            np.add.at(deduped, inv, arr_raw)
+            np.add.at(counts, inv, 1.0)
+            counts[counts == 0] = 1.0
+            return deduped / counts
+        return arr_raw[:n_out] if len(arr_raw) >= n_out else np.zeros(n_out)
 
     if bpm_keys:
         bpmx_arrays = []
@@ -194,16 +225,14 @@ def analysis_result_to_mat(
         for key in bpm_keys:
             bpm_val = raw_data.get(key, {})
             if isinstance(bpm_val, dict):
-                bpmx_arrays.append(
-                    np.asarray(
-                        bpm_val.get("x", np.zeros(n_pulses)), dtype=np.float64
-                    ).ravel()
-                )
-                bpmy_arrays.append(
-                    np.asarray(
-                        bpm_val.get("y", np.zeros(n_pulses)), dtype=np.float64
-                    ).ravel()
-                )
+                raw_x = np.asarray(
+                    bpm_val.get("x", np.zeros(len(inverse))), dtype=np.float64
+                ).ravel()
+                raw_y = np.asarray(
+                    bpm_val.get("y", np.zeros(len(inverse))), dtype=np.float64
+                ).ravel()
+                bpmx_arrays.append(_dedup_array(raw_x, inverse, n_pulses))
+                bpmy_arrays.append(_dedup_array(raw_y, inverse, n_pulses))
             else:
                 bpmx_arrays.append(np.zeros(n_pulses, dtype=np.float64))
                 bpmy_arrays.append(np.zeros(n_pulses, dtype=np.float64))
@@ -216,11 +245,10 @@ def analysis_result_to_mat(
     if toro_keys:
         toro_arrays = []
         for key in toro_keys:
-            toro_arrays.append(
-                np.asarray(
-                    raw_data.get(key, np.zeros(n_pulses)), dtype=np.float64
-                ).ravel()
-            )
+            raw_t = np.asarray(
+                raw_data.get(key, np.zeros(len(inverse))), dtype=np.float64
+            ).ravel()
+            toro_arrays.append(_dedup_array(raw_t, inverse, n_pulses))
         data["toroData"] = np.array(toro_arrays).reshape(len(toro_keys), n_pulses)
     else:
         # GUI always expects at least one toroid row
