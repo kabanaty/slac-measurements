@@ -213,6 +213,7 @@ class BaseWireMeasurementCollection(
             timestamp=None,
             active_profiles=self.beam_profile_device.active_profiles(),
             install_angle=self.beam_profile_device.install_angle,
+            charge_toroids=self.beam_profile_device.metadata.charge_toroids,
             notes=None,
         )
 
@@ -223,6 +224,8 @@ class BaseWireMeasurementCollection(
         then applies the same trim window to all detector reads so that
         ``position[i]`` and ``detector[i]`` correspond to the same BSA pulse.
         """
+
+        charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
 
         charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
 
