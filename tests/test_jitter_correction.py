@@ -247,11 +247,12 @@ class ComputeJitterTest(TestCase):
         rmat_y = np.array([[1.0, 0.4, 0.0], [0.9, 0.2, 0.0]])
         mock_rmat.return_value = (rmat_x, rmat_y)
 
-        jitter_x, jitter_y = compute_jitter(result, beampath="SC_HXR")
+        jitter_x, jitter_y, bpms_used = compute_jitter(result, beampath="SC_HXR")
 
         # Constant BPM readings -> zero jitter
         np.testing.assert_allclose(jitter_x, 0.0, atol=1e-10)
         np.testing.assert_allclose(jitter_y, 0.0, atol=1e-10)
+        self.assertEqual(bpms_used, ["BPM10", "BPM11"])
         mock_rmat.assert_called_once_with(
             "WIRE:TEST:100", ["BPM10", "BPM11"], "SC_HXR", "BLEM"
         )

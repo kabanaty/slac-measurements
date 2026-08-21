@@ -50,6 +50,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     fitting_method: str = "gaussian"
     jitter_corrected: bool = False
     jitter_rms: tuple[float, float] | None = None
+    jitter_bpms: list[str] | None = None
 
     def to_mat(self, filepath: str, **kwargs) -> str:
         """Export this result as a MATLAB .mat file compatible with wirescan_gui."""
@@ -63,6 +64,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         fitting_method: str = "gaussian",
         rms_detector: str | None = None,
         physics_model: str = "BLEM",
+        jitter_bpms: list[str] | None = None,
     ) -> "WireMeasurementAnalysisResult":
         """Re-analyze the collected data with different settings.
 
@@ -92,6 +94,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             rms_detector=rms_detector,
             jitter_correction=jitter_correction,
             physics_model=physics_model,
+            jitter_bpms=jitter_bpms,
         )
 
     def __repr__(self) -> str:

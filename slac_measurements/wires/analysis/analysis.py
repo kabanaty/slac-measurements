@@ -42,6 +42,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         rms_detector: str | None = None,
         jitter_correction: bool = False,
         physics_model: str = "BLEM",
+        jitter_bpms: list[str] | None = None,
     ) -> WireMeasurementAnalysisResult:
         """
         Fit profiles and extract RMS beam sizes.
@@ -63,10 +64,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             Fit results, RMS sizes, and organized profile data.
         """
 
+        bpms_used = None
         if jitter_correction:
             beampath = self.collection_result.metadata.beampath
-            self._jitter_x, self._jitter_y = compute_jitter(
-                self.collection_result, beampath, physics_model
+            self._jitter_x, self._jitter_y, bpms_used = compute_jitter(
+                self.collection_result,
+                beampath,
+                physics_model,
+                bpm_names=jitter_bpms,
             )
 
         profile_indices = self._get_profile_range_indices()
@@ -98,6 +103,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             fitting_method=self.fitting_method,
             jitter_corrected=jitter_correction,
             jitter_rms=jitter_rms,
+            jitter_bpms=bpms_used,
         )
 
     def _create_detector_measurement(

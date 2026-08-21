@@ -28,6 +28,7 @@ class WireBeamProfileMeasurement(slac_measurements.beam_profile.BeamProfileMeasu
         fitting_method: FittingMethod = "gaussian",
         rms_detector: Optional[str] = None,
         jitter_correction: bool = False,
+        jitter_bpms: Optional[list[str]] = None,
     ) -> WireMeasurementAnalysisResult:
         """
         Run a wire scan and return the analyzed result.
@@ -55,4 +56,5 @@ class WireBeamProfileMeasurement(slac_measurements.beam_profile.BeamProfileMeasu
         return analysis.analyze(
             rms_detector=rms_detector,
             jitter_correction=jitter_correction,
+            jitter_bpms=jitter_bpms,
         )

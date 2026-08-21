@@ -10,7 +10,8 @@ def compute_jitter(
     collection_result: WireMeasurementCollectionResult,
     beampath: str,
     physics_model: str = "BLEM",
-) -> tuple[np.ndarray, np.ndarray]:
+    bpm_names: list[str] | None = None,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Compute per-pulse beam jitter at the wire from BPM data.
 
     Uses BPM position data and transport matrices to reconstruct beam
@@ -26,12 +27,15 @@ def compute_jitter(
         Beam path identifier for the model (e.g., "SC_HXR", "SC_DIAG0").
     physics_model : str
         Model source for R-matrix retrieval. Default "BLEM".
+    bpm_names : list[str] | None
+        Restrict jitter calculation to these BPMs. When None, use all
+        BPMs found in raw_data.
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray]
-        (jitter_x, jitter_y) per-pulse beam position jitter at the wire
-        in um, one value per buffer pulse.
+    tuple[np.ndarray, np.ndarray, list[str]]
+        (jitter_x, jitter_y, bpms_used) per-pulse beam position jitter at
+        the wire in um, and the list of BPM names actually used.
 
     Raises
     ------
@@ -41,19 +45,20 @@ def compute_jitter(
     """
     raw_data = collection_result.raw_data
 
-    bpm_x_data, bpm_y_data, bpm_names = _extract_bpm_data(raw_data)
+    bpm_x_data, bpm_y_data, bpm_names_used = _extract_bpm_data(raw_data, bpm_names)
 
-    if len(bpm_names) < 2:
+    if len(bpm_names_used) < 2:
         raise ValueError(
             f"Jitter correction requires at least 2 BPMs with valid data, "
-            f"found {len(bpm_names)}."
+            f"found {len(bpm_names_used)}."
         )
 
     wire_name = collection_result.metadata.wire_name
 
-    rmat_x, rmat_y = get_jitter_rmat(wire_name, bpm_names, beampath, physics_model)
+    rmat_x, rmat_y = get_jitter_rmat(wire_name, bpm_names_used, beampath, physics_model)
 
-    return _compute_orbit_fit(bpm_x_data, bpm_y_data, rmat_x, rmat_y)
+    jitter_x, jitter_y = _compute_orbit_fit(bpm_x_data, bpm_y_data, rmat_x, rmat_y)
+    return jitter_x, jitter_y, bpm_names_used
 
 
 def get_jitter_rmat(
@@ -107,6 +112,7 @@ def get_jitter_rmat(
 
 def _extract_bpm_data(
     raw_data: dict,
+    bpm_names: list[str] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Extract BPM x/y position data from raw_data dictionary.
 
@@ -119,7 +125,10 @@ def _extract_bpm_data(
         (bpm_x_array, bpm_y_array, bpm_names) where arrays are
         [N_bpms x N_pulses] and bpm_names are device names.
     """
-    bpm_keys = sorted(k for k in raw_data if k.startswith("BPM"))
+    if bpm_names is not None:
+        bpm_keys = sorted(k for k in bpm_names if k in raw_data)
+    else:
+        bpm_keys = sorted(k for k in raw_data if k.startswith("BPM"))
 
     bpm_names = []
     x_arrays = []
