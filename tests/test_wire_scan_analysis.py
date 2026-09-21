@@ -379,6 +379,19 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         self.assertEqual(x_rms, 1.1)
         self.assertIsNone(y_rms)
 
+    def test_get_rms_sizes_warns_when_detector_not_fitted(self):
+        analysis = self._make_analysis(
+            default_detector="D1",
+            detectors=["D1", "D2"],
+        )
+        fit_result = _make_fit_result({"x": {"D2": 3.0}, "y": {"D2": 4.0}})
+
+        with self.assertWarns(UserWarning):
+            x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D1")
+
+        self.assertIsNone(x_rms)
+        self.assertIsNone(y_rms)
+
     def test_get_rms_sizes_raises_for_unknown_detector(self):
         analysis = self._make_analysis(detectors=["D1", "D2"])
 

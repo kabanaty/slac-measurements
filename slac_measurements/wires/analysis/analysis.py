@@ -419,12 +419,26 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         y_rms = None
 
         if "x" in fit_result:
-            x_fit = fit_result["x"].detectors[selected_detector]
-            x_rms = x_fit.sigma
+            if selected_detector in fit_result["x"].detectors:
+                x_rms = fit_result["x"].detectors[selected_detector].sigma
+            else:
+                warnings.warn(
+                    f"Detector '{selected_detector}' was not fitted for "
+                    f"profile 'x' (likely all-NaN data). RMS x will be None.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         if "y" in fit_result:
-            y_fit = fit_result["y"].detectors[selected_detector]
-            y_rms = y_fit.sigma
+            if selected_detector in fit_result["y"].detectors:
+                y_rms = fit_result["y"].detectors[selected_detector].sigma
+            else:
+                warnings.warn(
+                    f"Detector '{selected_detector}' was not fitted for "
+                    f"profile 'y' (likely all-NaN data). RMS y will be None.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         return (x_rms, y_rms)
 
