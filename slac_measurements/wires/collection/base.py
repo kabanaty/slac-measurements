@@ -262,7 +262,7 @@ class BaseWireMeasurementCollection(
                 trim_offset,
             )
 
-        buf_kwargs = dict(retries=3, retry_delay=3.0)
+        buf_kwargs = dict(retries=3, retry_delay=3.0, pad=True)
         if trim_offset > 0:
             buf_kwargs["trim_offset"] = trim_offset
 
