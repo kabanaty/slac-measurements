@@ -224,7 +224,12 @@ class BaseWireMeasurementCollection(
         )
 
     def _get_data_from_buffer(self) -> dict:
-        """Collects wire scan and detector data after buffer completes."""
+        """Collects wire scan and detector data after buffer completes.
+
+        Reads the wire position PV first to detect stale-data offset,
+        then applies the same trim window to all detector reads so that
+        ``position[i]`` and ``detector[i]`` correspond to the same BSA pulse.
+        """
 
         charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
 
@@ -244,6 +249,23 @@ class BaseWireMeasurementCollection(
             else:
                 return None
 
+        self.logger.info("Getting data from timing buffer ...")
+
+        wire_device = self.devices[self.beam_profile_device.name]
+        position_pv = f"{wire_device.controls_information.control_name}:POSN"
+        trim_offset = self.buffer.compute_trim_offset(position_pv)
+        if trim_offset > 0:
+            self.logger.info(
+                "Detected %d stale samples at front of buffer. "
+                "Applying trim_offset=%d to all PV reads.",
+                trim_offset,
+                trim_offset,
+            )
+
+        buf_kwargs = dict(retries=3, retry_delay=3.0)
+        if trim_offset > 0:
+            buf_kwargs["trim_offset"] = trim_offset
+
         def _collect_device_data(device_name: str):
             """Collect data for a given device."""
 
@@ -251,24 +273,21 @@ class BaseWireMeasurementCollection(
             buffer_method = _get_buffer_collection_method(device_name)
 
             if buffer_method is None:
+                if device_name == "TMITLOSS":
+                    return device.measure(trim_offset=trim_offset)
                 return device.measure()
 
             if buffer_method == "bpm_buffer":
                 result = {
-                    "x": device.x_buffer(self.buffer, retries=3, retry_delay=3.0),
-                    "y": device.y_buffer(self.buffer, retries=3, retry_delay=3.0),
+                    "x": device.x_buffer(self.buffer, **buf_kwargs),
+                    "y": device.y_buffer(self.buffer, **buf_kwargs),
                 }
                 if device_name in charge_toroid_names:
-                    result["tmit"] = device.tmit_buffer(
-                        self.buffer, retries=3, retry_delay=3.0
-                    )
+                    result["tmit"] = device.tmit_buffer(self.buffer, **buf_kwargs)
                 return result
 
-            return getattr(device, buffer_method)(
-                self.buffer, retries=3, retry_delay=3.0
-            )
+            return getattr(device, buffer_method)(self.buffer, **buf_kwargs)
 
-        self.logger.info("Getting data from timing buffer ...")
         data = {name: _collect_device_data(name) for name in self.devices.keys()}
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
