@@ -78,8 +78,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
         metadata = self.collection_result.metadata
+        resolved_default = metadata.default_detector
+        if isinstance(resolved_default, dict):
+            timing = "CU" if metadata.beampath.startswith("CU") else "SC"
+            resolved_default = resolved_default.get(timing, "")
+        if ":" in resolved_default:
+            resolved_default = resolved_default.split(":", 1)[0]
         metadata.rms_detector = (
-            rms_detector if rms_detector is not None else metadata.default_detector
+            rms_detector if rms_detector is not None else resolved_default
         )
 
         jitter_rms = None
@@ -408,6 +414,13 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             if detector is None
             else detector
         )
+
+        if isinstance(selected_detector, dict):
+            beampath = self.collection_result.metadata.beampath
+            timing = "CU" if beampath.startswith("CU") else "SC"
+            selected_detector = selected_detector.get(timing, "")
+        if ":" in selected_detector:
+            selected_detector = selected_detector.split(":", 1)[0]
 
         if selected_detector not in available_detectors:
             raise ValueError(
