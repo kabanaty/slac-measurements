@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional
 
 import numpy as np
@@ -44,6 +45,14 @@ class TMITLoss(Measurement):
 
     def measure(self, trim_offset: int = 0):
         """Acquire TMIT data and return percentage loss as a numpy array."""
+        if trim_offset > 0:
+            warnings.warn(
+                "trim_offset is a temporary workaround for firmware that "
+                "over-reports buffer length and will be removed once the "
+                "firmware is fixed.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         data = self._get_bpm_data(trim_offset=trim_offset)
         return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
 
