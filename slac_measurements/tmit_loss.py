@@ -50,7 +50,7 @@ class TMITLoss(Measurement):
                 "trim_offset is a temporary workaround for firmware that "
                 "over-reports buffer length and will be removed once the "
                 "firmware is fixed.",
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
         data = self._get_bpm_data(trim_offset=trim_offset)
