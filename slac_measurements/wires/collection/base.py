@@ -23,6 +23,21 @@ _ACQUISITION_TIMEOUT_MIN_EXTRA_S = 10.0
 ScanMode = Literal["step", "otf"]
 
 
+def _resolve_detectors(metadata, beampath: str) -> tuple[list[str], str]:
+    """Return (detector_strings, default_detector_string) for the active beampath."""
+    timing = "CU" if beampath.startswith("CU") else "SC"
+
+    detectors = metadata.detectors
+    if isinstance(detectors, dict):
+        detectors = detectors.get(timing, [])
+
+    default = metadata.default_detector
+    if isinstance(default, dict):
+        default = default.get(timing, "")
+
+    return detectors, default
+
+
 class BaseWireMeasurementCollection(
     slac_measurements.beam_profile.BeamProfileMeasurement,
     ABC,
@@ -46,6 +61,8 @@ class BaseWireMeasurementCollection(
     buffer: Buffer | None = None
     devices: dict | None = None
     detectors: list | None = None
+    _detector_strings: list | None = None
+    _resolved_default: str | None = None
     data: dict | None = None
     logger: logging.Logger | None = None
     metadata: MeasurementMetadata | None = None
@@ -151,7 +168,7 @@ class BaseWireMeasurementCollection(
 
         devices = {self.beam_profile_device.name: self.beam_profile_device}
 
-        for ds in self.beam_profile_device.metadata.detectors:
+        for ds in self._detector_strings:
             name, area = ds.split(":")
             detector = _instantiate_device(name, area)
             if detector is not None:
@@ -186,7 +203,7 @@ class BaseWireMeasurementCollection(
         def _get_default_detector() -> str:
             """Determine the default detector for analysis from wire metadata or device list."""
 
-            default_detector = self.beam_profile_device.metadata.default_detector
+            default_detector = self._resolved_default
 
             if not default_detector:
                 if not self.detectors:
@@ -326,10 +343,12 @@ class BaseWireMeasurementCollection(
         )
         self.logger.propagate = False
 
-        # Get list of detector names from wire metadata
-        self.detectors = [
-            d.split(":")[0] for d in self.beam_profile_device.metadata.detectors
-        ]
+        detector_strings, self._resolved_default = _resolve_detectors(
+            self.beam_profile_device.metadata,
+            self.beampath,
+        )
+        self._detector_strings = detector_strings
+        self.detectors = [d.split(":")[0] for d in detector_strings]
         return self
 
 
