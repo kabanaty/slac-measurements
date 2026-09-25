@@ -63,8 +63,18 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             Fit results, RMS sizes, and organized profile data.
         """
 
+        metadata = self.collection_result.metadata
+        beampath = metadata.beampath
+
+        if isinstance(rms_detector, dict):
+            timing = "CU" if beampath.startswith("CU") else "SC"
+            rms_detector = rms_detector.get(timing, "")
+        if rms_detector and ":" in rms_detector:
+            rms_detector = rms_detector.split(":", 1)[0]
+        if rms_detector == "":
+            rms_detector = None
+
         if jitter_correction:
-            beampath = self.collection_result.metadata.beampath
             self._jitter_x, self._jitter_y = compute_jitter(
                 self.collection_result, beampath, physics_model
             )
@@ -77,9 +87,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         )
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
-        metadata = self.collection_result.metadata
+        default_det = metadata.default_detector
+        if isinstance(default_det, dict):
+            timing = "CU" if beampath.startswith("CU") else "SC"
+            default_det = default_det.get(timing, "")
+        if ":" in default_det:
+            default_det = default_det.split(":", 1)[0]
         metadata.rms_detector = (
-            rms_detector if rms_detector is not None else metadata.default_detector
+            rms_detector if rms_detector is not None else default_det
         )
 
         jitter_rms = None
@@ -409,22 +424,51 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             else detector
         )
 
+        if isinstance(selected_detector, dict):
+            beampath = self.collection_result.metadata.beampath
+            timing = "CU" if beampath.startswith("CU") else "SC"
+            selected_detector = selected_detector.get(timing, "")
+        if isinstance(selected_detector, str) and ":" in selected_detector:
+            selected_detector = selected_detector.split(":", 1)[0]
+
         if selected_detector not in available_detectors:
             raise ValueError(
                 f"Detector '{selected_detector}' is not available in "
                 f"metadata.detectors={available_detectors}."
             )
 
+        fitted_detectors: set[str] = set()
+        for axis in ("x", "y"):
+            if axis in fit_result:
+                fitted_detectors.update(fit_result[axis].detectors.keys())
+
+        if selected_detector not in fitted_detectors:
+            if not fitted_detectors:
+                raise RuntimeError(
+                    f"No detectors have fit data. Detector '{selected_detector}' "
+                    "was configured but may have failed device creation."
+                )
+            fallback = next(iter(fitted_detectors))
+            warnings.warn(
+                f"Detector '{selected_detector}' has no fit data (device may "
+                f"have failed to create). Falling back to '{fallback}'.",
+                UserWarning,
+                stacklevel=2,
+            )
+            selected_detector = fallback
+
         x_rms = None
         y_rms = None
 
         if "x" in fit_result:
-            x_fit = fit_result["x"].detectors[selected_detector]
-            x_rms = x_fit.sigma
+            detectors_x = fit_result["x"].detectors
+            if selected_detector in detectors_x:
+                x_rms = detectors_x[selected_detector].sigma
 
         if "y" in fit_result:
-            y_fit = fit_result["y"].detectors[selected_detector]
-            y_rms = y_fit.sigma
+            detectors_y = fit_result["y"].detectors
+            if selected_detector in detectors_y:
+                y_rms = detectors_y[selected_detector].sigma
 
         return (x_rms, y_rms)
 
