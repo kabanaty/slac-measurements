@@ -266,17 +266,21 @@ class BaseWireMeasurementCollection(
 
             if buffer_method == "bpm_buffer":
                 result = {
-                    "x": device.x_buffer(self.buffer, retries=3, retry_delay=3.0),
-                    "y": device.y_buffer(self.buffer, retries=3, retry_delay=3.0),
+                    "x": device.x_buffer(
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
+                    ),
+                    "y": device.y_buffer(
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
+                    ),
                 }
                 if device_name in charge_toroid_names:
                     result["tmit"] = device.tmit_buffer(
-                        self.buffer, retries=3, retry_delay=3.0
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
                     )
                 return result
 
             return getattr(device, buffer_method)(
-                self.buffer, retries=3, retry_delay=3.0
+                self.buffer, retries=3, retry_delay=3.0, pad=True
             )
 
         data = {name: _collect_device_data(name) for name in self.devices.keys()}
