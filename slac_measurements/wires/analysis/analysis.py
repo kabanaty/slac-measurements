@@ -20,6 +20,20 @@ from slac_measurements.wires.analysis.results import (
 FittingMethod = Literal["gaussian", "asymmetric_gaussian", "super_gaussian"]
 
 
+def _resolve_detector(detector: str | dict | None, beampath: str) -> str | None:
+    """Resolve a detector that may be a dict or contain a colon suffix."""
+    if detector is None:
+        return None
+    if isinstance(detector, dict):
+        timing = "CU" if beampath.startswith("CU") else "SC"
+        name = detector.get(timing, "")
+    else:
+        name = detector
+    if ":" in name:
+        name = name.split(":", 1)[0]
+    return name or None
+
+
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
     Organizes wire-scan data by profile, fits curves, and extracts
@@ -66,13 +80,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         metadata = self.collection_result.metadata
         beampath = metadata.beampath
 
-        if isinstance(rms_detector, dict):
-            timing = "CU" if beampath.startswith("CU") else "SC"
-            rms_detector = rms_detector.get(timing, "")
-        if rms_detector and ":" in rms_detector:
-            rms_detector = rms_detector.split(":", 1)[0]
-        if rms_detector == "":
-            rms_detector = None
+        rms_detector = _resolve_detector(rms_detector, beampath)
 
         if jitter_correction:
             self._jitter_x, self._jitter_y = compute_jitter(
@@ -87,12 +95,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         )
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
-        default_det = metadata.default_detector
-        if isinstance(default_det, dict):
-            timing = "CU" if beampath.startswith("CU") else "SC"
-            default_det = default_det.get(timing, "")
-        if ":" in default_det:
-            default_det = default_det.split(":", 1)[0]
+        default_det = _resolve_detector(metadata.default_detector, beampath)
         metadata.rms_detector = (
             rms_detector if rms_detector is not None else default_det
         )
@@ -418,18 +421,13 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         """
 
         available_detectors = self.collection_result.metadata.detectors
-        selected_detector = (
-            self.collection_result.metadata.default_detector
-            if detector is None
-            else detector
+        beampath = self.collection_result.metadata.beampath
+        raw = (
+            detector
+            if detector is not None
+            else self.collection_result.metadata.default_detector
         )
-
-        if isinstance(selected_detector, dict):
-            beampath = self.collection_result.metadata.beampath
-            timing = "CU" if beampath.startswith("CU") else "SC"
-            selected_detector = selected_detector.get(timing, "")
-        if isinstance(selected_detector, str) and ":" in selected_detector:
-            selected_detector = selected_detector.split(":", 1)[0]
+        selected_detector = _resolve_detector(raw, beampath)
 
         if selected_detector not in available_detectors:
             raise ValueError(
