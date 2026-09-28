@@ -241,7 +241,12 @@ class BaseWireMeasurementCollection(
         )
 
     def _get_data_from_buffer(self) -> dict:
-        """Collects wire scan and detector data after buffer completes."""
+        """Collects wire scan and detector data after buffer completes.
+
+        Reads the wire position PV first to detect stale-data offset,
+        then applies the same trim window to all detector reads so that
+        ``position[i]`` and ``detector[i]`` correspond to the same BSA pulse.
+        """
 
         charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
 
@@ -261,6 +266,12 @@ class BaseWireMeasurementCollection(
             else:
                 return None
 
+        wire_device = self.devices[self.beam_profile_device.name]
+        position_pv = f"{wire_device.controls_information.control_name}:POSN"
+        self.buffer.calibrate_trim(position_pv)
+
+        self.logger.info("Getting data from timing buffer ...")
+
         def _collect_device_data(device_name: str):
             """Collect data for a given device."""
 
@@ -272,12 +283,16 @@ class BaseWireMeasurementCollection(
 
             if buffer_method == "bpm_buffer":
                 result = {
-                    "x": device.x_buffer(self.buffer, retries=3, retry_delay=3.0),
-                    "y": device.y_buffer(self.buffer, retries=3, retry_delay=3.0),
+                    "x": device.x_buffer(
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
+                    ),
+                    "y": device.y_buffer(
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
+                    ),
                 }
                 if device_name in charge_toroid_names:
                     result["tmit"] = device.tmit_buffer(
-                        self.buffer, retries=3, retry_delay=3.0
+                        self.buffer, retries=3, retry_delay=3.0, pad=True
                     )
                 return result
 
@@ -285,7 +300,6 @@ class BaseWireMeasurementCollection(
                 self.buffer, retries=3, retry_delay=3.0, pad=True
             )
 
-        self.logger.info("Getting data from timing buffer ...")
         data = {name: _collect_device_data(name) for name in self.devices.keys()}
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
