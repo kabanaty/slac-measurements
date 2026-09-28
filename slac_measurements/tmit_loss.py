@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional
 
 import numpy as np
@@ -42,21 +43,33 @@ class TMITLoss(Measurement):
         ]
         return self
 
-    def measure(self):
+    def measure(self, trim_offset: int = 0):
         """Acquire TMIT data and return percentage loss as a numpy array."""
-        data = self._get_bpm_data()
+        if trim_offset > 0:
+            warnings.warn(
+                "trim_offset is a temporary workaround for firmware that "
+                "over-reports buffer length and will be removed once the "
+                "firmware is fixed.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        data = self._get_bpm_data(trim_offset=trim_offset)
         return self._calc_tmit_loss(data, self.idx_upstream, self.idx_downstream)
 
-    def _get_bpm_data(self) -> np.ndarray:
+    def _get_bpm_data(self, trim_offset: int = 0) -> np.ndarray:
         """Collect TMIT buffer data from all BPMs. Returns shape (n_bpms, n_samples)."""
         n_samples = self.buffer.n_measurements
         bpm_names = list(self.bpms.keys())
+
+        buf_kwargs = {"pad": True}
+        if trim_offset > 0:
+            buf_kwargs["trim_offset"] = trim_offset
 
         all_data = {}
         for area in self._beampath_obj.areas.values():
             if area.bpm_collection:
                 all_data.update(
-                    area.bpm_collection.get_buffer_data(self.buffer, pad=True)
+                    area.bpm_collection.get_buffer_data(self.buffer, **buf_kwargs)
                 )
 
         rows = [
