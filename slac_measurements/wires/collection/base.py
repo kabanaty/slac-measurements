@@ -25,16 +25,10 @@ ScanMode = Literal["step", "otf"]
 
 def _resolve_detectors(metadata, beampath: str) -> tuple[list[str], str]:
     """Return (detector_strings, default_detector_string) for the active beampath."""
-    timing = "CU" if beampath.startswith("CU") else "SC"
+    from slac_measurements.wires.detector_util import pick_by_timing
 
-    detectors = metadata.detectors
-    if isinstance(detectors, dict):
-        detectors = detectors.get(timing, [])
-
-    default = metadata.default_detector
-    if isinstance(default, dict):
-        default = default.get(timing, "")
-
+    detectors = pick_by_timing(metadata.detectors, beampath, fallback=[])
+    default = pick_by_timing(metadata.default_detector, beampath, fallback="")
     return detectors, default
 
 

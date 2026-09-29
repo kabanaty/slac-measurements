@@ -22,13 +22,11 @@ FittingMethod = Literal["gaussian", "asymmetric_gaussian", "super_gaussian"]
 
 def _resolve_detector(detector: str | dict | None, beampath: str) -> str | None:
     """Resolve a detector that may be a dict or contain a colon suffix."""
+    from slac_measurements.wires.detector_util import pick_by_timing
+
     if detector is None:
         return None
-    if isinstance(detector, dict):
-        timing = "CU" if beampath.startswith("CU") else "SC"
-        name = detector.get(timing, "")
-    else:
-        name = detector
+    name = pick_by_timing(detector, beampath, fallback="")
     if ":" in name:
         name = name.split(":", 1)[0]
     return name or None
