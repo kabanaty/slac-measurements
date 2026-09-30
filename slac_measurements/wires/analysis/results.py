@@ -1,5 +1,5 @@
-import numpy as np
-
+import h5py
+import slac_tools.pydantic_h5
 from pydantic import BaseModel, ConfigDict
 
 from slac_measurements.beam_profile import (
@@ -8,8 +8,8 @@ from slac_measurements.beam_profile import (
 from slac_measurements.utils import NDArrayAnnotatedType
 from slac_measurements.wires.collection.results import (
     WireMeasurementCollectionResult,
-    _load_metadata,
-    _load_raw_data,
+    _read_scan_ranges,
+    _write_scan_ranges,
 )
 
 
@@ -141,72 +141,27 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             at that location will be overwritten.
         """
 
-        import h5py
-
-        with h5py.File(filepath, "w") as f:
-
-            def _to_h5_float_array(values) -> np.ndarray:
-                """Convert optional numeric-like values to float array for HDF5."""
-                return np.array(
-                    [np.nan if value is None else float(value) for value in values],
-                    dtype=float,
-                )
-
-            col_grp = f.create_group("collection_result")
-
-            meta_grp = col_grp.create_group("metadata")
-            self.collection_result._save_metadata(meta_grp)
-
-            raw_grp = col_grp.create_group("raw_data")
-            self.collection_result._save_raw_data(raw_grp)
-
-            if self.rms_sizes is not None:
-                f.create_dataset(
-                    "rms_sizes",
-                    data=_to_h5_float_array(self.rms_sizes),
-                )
-            if self.centroids is not None:
-                f.create_dataset("centroids", data=np.array(self.centroids))
-            if self.total_intensities is not None:
-                f.create_dataset(
-                    "total_intensities", data=np.array(self.total_intensities)
-                )
-            if self.signal_to_noise_ratios is not None:
-                f.create_dataset(
-                    "signal_to_noise_ratios",
-                    data=np.array(self.signal_to_noise_ratios),
-                )
-
-            # analysis-specific data
-            analysis_grp = f.create_group("analysis")
-
-            # fit results
-            fit_grp = analysis_grp.create_group("fit_result")
-            for profile, fit in self.fit_result.items():
+        def _write_fit_result(value: dict, group: h5py.Group) -> None:
+            # Backward compatibility for existing hdf5 files:
+            # FitResult is a one-field {"detectors": {...}} wrapper; flatten
+            # past it so detectors sit directly under each profile, matching
+            # the original layout
+            fit_grp = group.create_group("analysis/fit_result")
+            for profile, fit in value.items():
                 prof_grp = fit_grp.create_group(profile)
                 for det_name, det_fit in fit.detectors.items():
-                    det_grp = prof_grp.create_group(det_name)
-                    det_grp.attrs["mean"] = det_fit.mean
-                    det_grp.attrs["sigma"] = det_fit.sigma
-                    det_grp.attrs["amplitude"] = det_fit.amplitude
-                    det_grp.attrs["offset"] = det_fit.offset
-                    det_grp.create_dataset("curve", data=det_fit.curve)
-                    det_grp.create_dataset("positions", data=det_fit.positions)
+                    slac_tools.pydantic_h5.save_model(
+                        det_fit, prof_grp.create_group(det_name)
+                    )
 
-            # profiles
-            profs_grp = analysis_grp.create_group("profiles")
-            for profile, prof in self.profiles.items():
-                pgrp = profs_grp.create_group(profile)
-                pgrp.create_dataset("positions", data=prof.positions)
-                pgrp.create_dataset("profile_indices", data=prof.profile_indices)
-                dets_grp = pgrp.create_group("detectors")
-                for det_name, det in prof.detectors.items():
-                    dg = dets_grp.create_group(det_name)
-                    dg.create_dataset("values", data=det.values)
-                    if det.units is not None:
-                        dg.attrs["units"] = det.units
-                    if det.label is not None:
-                        dg.attrs["label"] = det.label
+        with h5py.File(filepath, "w") as f:
+            slac_tools.pydantic_h5.save_model(
+                self,
+                f,
+                name_map={"profiles": "analysis/profiles"},
+                manual={"scan_ranges": _write_scan_ranges, "fit_result": _write_fit_result},
+                skip={"metadata"},  # duplicate of collection_result.metadata
+            )
 
 
 def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
@@ -219,72 +174,28 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
     debugging and post-processing scripts.
     """
 
-    import h5py
+    def _read_fit_result(group: h5py.Group) -> dict[str, FitResult] | None:
+        # Backward compatibility for existing hdf5 files:
+        # Inverse of `_write_fit_result`: re-insert the FitResult wrapper
+        # the writer flattened away
+        if "analysis/fit_result" not in group:
+            return None
+        fit_grp = group["analysis/fit_result"]
+        return {
+            profile: FitResult(
+                detectors={
+                    det: slac_tools.pydantic_h5.load_model(DetectorFit, prof_grp[det])
+                    for det in prof_grp.keys()
+                }
+            )
+            for profile, prof_grp in ((p, fit_grp[p]) for p in fit_grp.keys())
+        }
 
     with h5py.File(filepath, "r") as f:
-        col_group = f["collection_result"]
-        metadata = _load_metadata(col_group["metadata"])
-        raw_data = _load_raw_data(col_group["raw_data"])
-
-        # beam profile fields
-        rms = f.get("rms_sizes")
-        rms_val = (
-            tuple(None if np.isnan(v) else float(v) for v in rms[:])
-            if rms is not None
-            else None
+        return slac_tools.pydantic_h5.load_model(
+            WireMeasurementAnalysisResult,
+            f,
+            name_map={"profiles": "analysis/profiles"},
+            manual={"scan_ranges": _read_scan_ranges, "fit_result": _read_fit_result},
+            extra={"metadata": lambda resolved: resolved["collection_result"].metadata},
         )
-        centroids = f.get("centroids")
-        cent_val = centroids[:] if centroids is not None else None
-        totint = f.get("total_intensities")
-        tot_val = totint[:] if totint is not None else None
-        snr = f.get("signal_to_noise_ratios")
-        snr_val = snr[:] if snr is not None else None
-
-        # analysis
-        analysis_grp = f["analysis"]
-
-        fit_result: dict[str, FitResult] = {}
-        for profile in analysis_grp["fit_result"].keys():
-            prof_grp = analysis_grp["fit_result"][profile]
-            dets: dict[str, DetectorFit] = {}
-            for det_name in prof_grp.keys():
-                dg = prof_grp[det_name]
-                dets[det_name] = DetectorFit(
-                    mean=float(dg.attrs["mean"]),
-                    sigma=float(dg.attrs["sigma"]),
-                    amplitude=float(dg.attrs["amplitude"]),
-                    offset=float(dg.attrs["offset"]),
-                    curve=np.array(dg["curve"]),
-                    positions=np.array(dg["positions"]),
-                )
-            fit_result[profile] = FitResult(detectors=dets)
-
-        profiles: dict[str, ProfileMeasurement] = {}
-        for profile in analysis_grp["profiles"].keys():
-            pgrp = analysis_grp["profiles"][profile]
-            detectors = {}
-            for det_name in pgrp["detectors"].keys():
-                dg = pgrp["detectors"][det_name]
-                detectors[det_name] = DetectorProfileMeasurement(
-                    values=np.array(dg["values"]),
-                    units=dg.attrs.get("units", None),
-                    label=dg.attrs.get("label", None),
-                )
-            profiles[profile] = ProfileMeasurement(
-                positions=np.array(pgrp["positions"]),
-                profile_indices=np.array(pgrp["profile_indices"]),
-                detectors=detectors,
-            )
-
-    return WireMeasurementAnalysisResult(
-        fit_result=fit_result,
-        collection_result=WireMeasurementCollectionResult(
-            raw_data=raw_data, metadata=metadata
-        ),
-        profiles=profiles,
-        rms_sizes=rms_val,
-        centroids=cent_val,
-        total_intensities=tot_val,
-        signal_to_noise_ratios=snr_val,
-        metadata=metadata,
-    )
