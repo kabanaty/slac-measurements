@@ -20,18 +20,6 @@ from slac_measurements.wires.analysis.results import (
 FittingMethod = Literal["gaussian", "asymmetric_gaussian", "super_gaussian"]
 
 
-def _resolve_detector(detector: str | dict | None, beampath: str) -> str | None:
-    """Resolve a detector that may be a dict or contain a colon suffix."""
-    from slac_measurements.wires.detector_util import pick_by_timing
-
-    if detector is None:
-        return None
-    name = pick_by_timing(detector, beampath, fallback="")
-    if ":" in name:
-        name = name.split(":", 1)[0]
-    return name or None
-
-
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
     Organizes wire-scan data by profile, fits curves, and extracts
@@ -78,7 +66,15 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         metadata = self.collection_result.metadata
         beampath = metadata.beampath
 
-        rms_detector = _resolve_detector(rms_detector, beampath)
+        effective_detector = (
+            rms_detector if rms_detector is not None else metadata.default_detector
+        )
+        if effective_detector not in metadata.detectors:
+            raise ValueError(
+                f"Detector '{effective_detector}' is not available in "
+                f"metadata.detectors={metadata.detectors}."
+            )
+        metadata.rms_detector = effective_detector
 
         if jitter_correction:
             self._jitter_x, self._jitter_y = compute_jitter(
@@ -91,12 +87,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         fit_result = self._fit_data_by_profile(
             profile_measurements=profile_measurements
         )
-        rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
-
-        default_det = _resolve_detector(metadata.default_detector, beampath)
-        metadata.rms_detector = (
-            rms_detector if rms_detector is not None else default_det
-        )
+        rms_sizes = self._get_rms_sizes(fit_result, detector=effective_detector)
 
         jitter_rms = None
         if jitter_correction and self._jitter_x is not None:
@@ -404,67 +395,52 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         return profile_indices
 
     def _get_rms_sizes(
-        self, fit_result: dict, detector: str | None = None
+        self, fit_result: dict, detector: str
     ) -> tuple[float | None, float | None]:
         """
         Extract x/y RMS sizes from fit results.
 
         Parameters:
             fit_result (dict): Fit results from fit_data_by_profile().
-            detector (str | None): Detector to use; defaults to metadata default.
+            detector (str): Resolved detector name.
 
         Returns:
             tuple[float | None, float | None]: (x_rms, y_rms) in meters,
             or (None, None) if x/y are unavailable.
         """
 
-        available_detectors = self.collection_result.metadata.detectors
-        beampath = self.collection_result.metadata.beampath
-        raw = (
-            detector
-            if detector is not None
-            else self.collection_result.metadata.default_detector
-        )
-        selected_detector = _resolve_detector(raw, beampath)
-
-        if selected_detector not in available_detectors:
-            raise ValueError(
-                f"Detector '{selected_detector}' is not available in "
-                f"metadata.detectors={available_detectors}."
-            )
-
         fitted_detectors: set[str] = set()
         for axis in ("x", "y"):
             if axis in fit_result:
                 fitted_detectors.update(fit_result[axis].detectors.keys())
 
-        if selected_detector not in fitted_detectors:
+        if detector not in fitted_detectors:
             if not fitted_detectors:
                 raise RuntimeError(
-                    f"No detectors have fit data. Detector '{selected_detector}' "
+                    f"No detectors have fit data. Detector '{detector}' "
                     "was configured but may have failed device creation."
                 )
             fallback = next(iter(fitted_detectors))
             warnings.warn(
-                f"Detector '{selected_detector}' has no fit data (device may "
+                f"Detector '{detector}' has no fit data (device may "
                 f"have failed to create). Falling back to '{fallback}'.",
                 UserWarning,
                 stacklevel=2,
             )
-            selected_detector = fallback
+            detector = fallback
 
         x_rms = None
         y_rms = None
 
         if "x" in fit_result:
             detectors_x = fit_result["x"].detectors
-            if selected_detector in detectors_x:
-                x_rms = detectors_x[selected_detector].sigma
+            if detector in detectors_x:
+                x_rms = detectors_x[detector].sigma
 
         if "y" in fit_result:
             detectors_y = fit_result["y"].detectors
-            if selected_detector in detectors_y:
-                y_rms = detectors_y[selected_detector].sigma
+            if detector in detectors_y:
+                y_rms = detectors_y[detector].sigma
 
         return (x_rms, y_rms)
 

@@ -15,21 +15,16 @@ from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
+from slac_measurements.wires.detector_util import (
+    resolve_detectors,
+    split_detector_string,
+)
 
 _LOG_DIR = Path("/u1/lcls/physics/data/wire_scan/logs")
 _LOGGER_NAME = "wire_scan_logger"
 _ACQUISITION_TIMEOUT_MARGIN = 1.25
 _ACQUISITION_TIMEOUT_MIN_EXTRA_S = 10.0
 ScanMode = Literal["step", "otf"]
-
-
-def _resolve_detectors(metadata, beampath: str) -> tuple[list[str], str]:
-    """Return (detector_strings, default_detector_string) for the active beampath."""
-    from slac_measurements.wires.detector_util import pick_by_timing
-
-    detectors = pick_by_timing(metadata.detectors, beampath, fallback=[])
-    default = pick_by_timing(metadata.default_detector, beampath, fallback="")
-    return detectors, default
 
 
 class BaseWireMeasurementCollection(
@@ -163,7 +158,7 @@ class BaseWireMeasurementCollection(
         devices = {self.beam_profile_device.name: self.beam_profile_device}
 
         for ds in self._detector_strings:
-            name, area = ds.split(":")
+            name, area = split_detector_string(ds)
             detector = _instantiate_device(name, area)
             if detector is not None:
                 devices[name] = detector
@@ -196,20 +191,7 @@ class BaseWireMeasurementCollection(
 
         def _get_default_detector() -> str:
             """Determine the default detector for analysis from wire metadata or device list."""
-
-            default_detector = self._resolved_default
-
-            if not default_detector:
-                if not self.detectors:
-                    msg = (
-                        "No detectors available from wire metadata; "
-                        "cannot determine default detector."
-                    )
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                return self.detectors[0]
-
-            return default_detector.split(":", 1)[0]
+            return self._resolved_default
 
         def _get_scan_ranges() -> dict:
             """Return dictionary of scan ranges for x, y, and u motors."""
@@ -351,12 +333,14 @@ class BaseWireMeasurementCollection(
         )
         self.logger.propagate = False
 
-        detector_strings, self._resolved_default = _resolve_detectors(
-            self.beam_profile_device.metadata,
+        config = resolve_detectors(
+            self.beam_profile_device.metadata.detectors,
+            self.beam_profile_device.metadata.default_detector,
             self.beampath,
         )
-        self._detector_strings = detector_strings
-        self.detectors = [d.split(":")[0] for d in detector_strings]
+        self._detector_strings = config.raw_strings
+        self.detectors = config.names
+        self._resolved_default = config.default
         return self
 
 

@@ -348,7 +348,7 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             }
         )
 
-        x_rms, y_rms = analysis._get_rms_sizes(fit_result)
+        x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D1")
 
         self.assertEqual(x_rms, 1.25)
         self.assertEqual(y_rms, 2.5)
@@ -374,16 +374,16 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         analysis = self._make_analysis(default_detector="D1")
         fit_result = _make_fit_result({"x": {"D1": 1.1}})
 
-        x_rms, y_rms = analysis._get_rms_sizes(fit_result)
+        x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D1")
 
         self.assertEqual(x_rms, 1.1)
         self.assertIsNone(y_rms)
 
-    def test_get_rms_sizes_raises_for_unknown_detector(self):
+    def test_analyze_raises_for_unknown_rms_detector(self):
         analysis = self._make_analysis(detectors=["D1", "D2"])
 
         with self.assertRaises(ValueError):
-            analysis._get_rms_sizes({}, detector="D3")
+            analysis.analyze(rms_detector="D3")
 
     def test_fit_profile_skips_all_nan_detector_with_warning(self):
         analysis = self._make_analysis(
