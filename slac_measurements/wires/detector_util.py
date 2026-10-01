@@ -3,19 +3,19 @@ from __future__ import annotations
 from typing import NamedTuple
 
 
-def resolve_timing_key(beampath: str) -> str:
+def resolve_beampath_key(beampath: str) -> str:
     """Derive the CU/SC timing key from a beampath string."""
     return "CU" if beampath.startswith("CU") else "SC"
 
 
-def pick_by_timing(
+def pick_by_beampath(
     detector_container: str | list[str] | dict[str, str] | dict[str, list[str]],
     beampath: str,
     fallback: str | list[str] | None = None,
 ) -> str | list[str] | None:
-    """If *detector_container* is a dict keyed by CU/SC, return the entry for the active timing; otherwise pass through."""
+    """If *detector_container* is a dict keyed by CU/SC, return the entry for the active beampath; otherwise pass through."""
     if isinstance(detector_container, dict):
-        timing = resolve_timing_key(beampath)
+        timing = resolve_beampath_key(beampath)
         return detector_container.get(timing, fallback)
     return detector_container
 
@@ -70,15 +70,15 @@ def resolve_detectors(
         ``raw_strings`` — original timing-resolved strings with colon
         suffixes intact (needed for device instantiation).
     """
-    timing = resolve_timing_key(beampath)
+    beampath_key = resolve_beampath_key(beampath)
 
     if isinstance(detectors, dict):
-        raw_strings = detectors.get(timing, [])
+        raw_strings = detectors.get(beampath_key, [])
     else:
         raw_strings = detectors
 
     if isinstance(default_detector, dict):
-        raw_default = default_detector.get(timing, "")
+        raw_default = default_detector.get(beampath_key, "")
     else:
         raw_default = default_detector
 
