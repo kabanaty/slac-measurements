@@ -5,8 +5,10 @@ import scipy.io
 from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
+from unittest.mock import patch
 
 from slac_measurements.wires.analysis.mat_export import (
+    _fetch_rmat_list,
     analysis_result_to_mat,
     datetime_to_matlab_datenum,
 )
@@ -21,6 +23,8 @@ from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
+
+from conftest import mock_meme
 
 
 def _make_analysis_result(
@@ -324,3 +328,32 @@ class TestAnalysisResultToMat(TestCase):
         self.assertEqual(returned_path, path)
         mat = scipy.io.loadmat(path)
         self.assertIn("data", mat)
+
+
+class TestFetchRmatList(TestCase):
+    """Ensure matlab export with unresponsive meme completes with a warning, see b9e6605"""
+
+    @mock_meme
+    @patch("meme.model.Model")
+    def test_falls_back_to_zeros_and_warns_on_model_construction_failure(
+        self, mock_model_cls
+    ):
+        mock_model_cls.side_effect = RuntimeError("physics model service down")
+
+        with self.assertWarns(UserWarning):
+            result = _fetch_rmat_list("WIRE:TEST:285", ["BPM1", "BPM2"], "SC_HXR")
+
+        self.assertEqual(result.shape, (4, 6, 2))
+        np.testing.assert_array_equal(result, np.zeros((4, 6, 2)))
+
+    @mock_meme
+    @patch("meme.model.Model")
+    def test_returns_real_rmats_on_success(self, mock_model_cls):
+        mock_model = mock_model_cls.return_value
+        rmat_6x6 = np.arange(36, dtype=float).reshape(6, 6)
+        mock_model.get_rmat.return_value = rmat_6x6
+
+        result = _fetch_rmat_list("WIRE:TEST:285", ["BPM1"], "SC_HXR")
+
+        self.assertEqual(result.shape, (4, 6, 1))
+        np.testing.assert_array_equal(result[:, :, 0], rmat_6x6[:4, :6])

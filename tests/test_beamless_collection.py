@@ -1,3 +1,4 @@
+import time
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -5,6 +6,7 @@ import numpy as np
 
 from slac_measurements.wires.collection.beamless_step import run_beamless_step_scan
 from slac_measurements.wires.collection.beamless_otf import run_beamless_otf_scan
+from slac_measurements.wires.motion.step import _WIRE_RETRACT_WAIT
 
 
 class BeamlessStepScanTest(TestCase):
@@ -86,9 +88,13 @@ class BeamlessStepScanTest(TestCase):
         device = self._make_device()
         mock_poll.return_value = [100.0]
 
+        start = time.monotonic()
         run_beamless_step_scan(device)
+        elapsed = time.monotonic() - start
 
         device.retract.assert_called_once()
+        # Motor needs a moment, see 9ad42d6.
+        self.assertGreaterEqual(elapsed, _WIRE_RETRACT_WAIT)
 
 
 class BeamlessOTFScanTest(TestCase):
