@@ -409,26 +409,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             or (None, None) if x/y are unavailable.
         """
 
-        fitted_detectors: set[str] = set()
-        for axis in ("x", "y"):
-            if axis in fit_result:
-                fitted_detectors.update(fit_result[axis].detectors.keys())
-
-        if detector not in fitted_detectors:
-            if not fitted_detectors:
-                raise RuntimeError(
-                    f"No detectors have fit data. Detector '{detector}' "
-                    "was configured but may have failed device creation."
-                )
-            fallback = next(iter(fitted_detectors))
-            warnings.warn(
-                f"Detector '{detector}' has no fit data (device may "
-                f"have failed to create). Falling back to '{fallback}'.",
-                UserWarning,
-                stacklevel=2,
-            )
-            detector = fallback
-
         x_rms = None
         y_rms = None
 
