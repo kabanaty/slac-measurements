@@ -15,6 +15,10 @@ from slac_measurements.wires.collection.results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
 )
+from slac_measurements.wires.detector_util import (
+    resolve_detectors,
+    split_detector_string,
+)
 
 _LOG_DIR = Path("/u1/lcls/physics/data/wire_scan/logs")
 _LOGGER_NAME = "wire_scan_logger"
@@ -46,6 +50,8 @@ class BaseWireMeasurementCollection(
     buffer: Buffer | None = None
     devices: dict | None = None
     detectors: list | None = None
+    _detector_strings: list | None = None
+    _resolved_default: str | None = None
     data: dict | None = None
     logger: logging.Logger | None = None
     metadata: MeasurementMetadata | None = None
@@ -151,8 +157,8 @@ class BaseWireMeasurementCollection(
 
         devices = {self.beam_profile_device.name: self.beam_profile_device}
 
-        for ds in self.beam_profile_device.metadata.detectors:
-            name, area = ds.split(":")
+        for ds in self._detector_strings:
+            name, area = split_detector_string(ds)
             detector = _instantiate_device(name, area)
             if detector is not None:
                 devices[name] = detector
@@ -185,20 +191,7 @@ class BaseWireMeasurementCollection(
 
         def _get_default_detector() -> str:
             """Determine the default detector for analysis from wire metadata or device list."""
-
-            default_detector = self.beam_profile_device.metadata.default_detector
-
-            if not default_detector:
-                if not self.detectors:
-                    msg = (
-                        "No detectors available from wire metadata; "
-                        "cannot determine default detector."
-                    )
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                return self.detectors[0]
-
-            return default_detector.split(":", 1)[0]
+            return self._resolved_default
 
         def _get_scan_ranges() -> dict:
             """Return dictionary of scan ranges for x, y, and u motors."""
@@ -340,10 +333,14 @@ class BaseWireMeasurementCollection(
         )
         self.logger.propagate = False
 
-        # Get list of detector names from wire metadata
-        self.detectors = [
-            d.split(":")[0] for d in self.beam_profile_device.metadata.detectors
-        ]
+        config = resolve_detectors(
+            self.beam_profile_device.metadata.detectors,
+            self.beam_profile_device.metadata.default_detector,
+            self.beampath,
+        )
+        self._detector_strings = config.raw_strings
+        self.detectors = config.names
+        self._resolved_default = config.default
         return self
 
 
