@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 
 import h5py
+import numpy as np
 import slac_tools.pydantic_h5
 from pydantic import BaseModel, ConfigDict
 
@@ -41,6 +42,33 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     raw_data: dict[str, Any]
     metadata: MeasurementMetadata
+
+    @property
+    def wire_name(self) -> str:
+        return self.metadata.wire_name
+
+    @property
+    def wire_positions(self) -> np.ndarray:
+        return self.raw_data[self.metadata.wire_name]
+
+    @property
+    def effective_detector(self) -> str | None:
+        return self.metadata.rms_detector or self.metadata.default_detector
+
+    def get_device_data(self, device_name: str) -> np.ndarray | dict[str, np.ndarray]:
+        return self.raw_data[device_name]
+
+    @property
+    def bpm_data(self) -> dict[str, dict[str, np.ndarray]]:
+        return {
+            k: v
+            for k, v in sorted(self.raw_data.items())
+            if isinstance(v, dict) and "x" in v and "y" in v
+        }
+
+    @property
+    def device_names(self) -> list[str]:
+        return list(self.raw_data.keys())
 
     def __repr__(self) -> str:
         """Return a string representation of the WireMeasurementCollectionResult."""
@@ -102,6 +130,7 @@ def load_from_h5(filepath: str) -> WireMeasurementCollectionResult:
             manual=dict(scan_ranges=_read_scan_ranges),
         )
 
+
 def _read_scan_ranges(group: h5py.Group) -> dict[str, tuple[int, int]]:
     """Backward compatibility for existing hdf5 files:
     Inverse of `_write_scan_ranges`."""
@@ -111,6 +140,7 @@ def _read_scan_ranges(group: h5py.Group) -> dict[str, tuple[int, int]]:
         axis: (int(sub.attrs[f"{axis}_start"]), int(sub.attrs[f"{axis}_end"]))
         for axis in axes
     }
+
 
 def _write_scan_ranges(value: dict[str, tuple[int, int]], group: h5py.Group) -> None:
     """Backward compatibility for existing hdf5 files:
