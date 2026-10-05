@@ -21,10 +21,10 @@ dependencies = [
     "pydantic",
     "h5py",
     "scikit-image",
-    "torch",
     "slac-devices @ git+https://github.com/slaclab/slac-devices.git@main",
     "slac-timing @ git+https://github.com/slaclab/slac-timing.git@master",
     "slac-tools @ git+https://github.com/slaclab/slac-tools.git@main",
+    "slac-model @ git+https://github.com/slaclab/slac-model.git@main",
 ]
 description = "Tools to support high level application development at LCLS using Python"
 dynamic = ["version"]
