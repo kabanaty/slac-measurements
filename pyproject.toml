@@ -24,12 +24,13 @@ dependencies = [
     "torch",
     "slac-devices @ git+https://github.com/slaclab/slac-devices.git@main",
     "slac-timing @ git+https://github.com/slaclab/slac-timing.git@master",
+    "slac-tools @ git+https://github.com/slaclab/slac-tools.git@main",
 ]
 description = "Tools to support high level application development at LCLS using Python"
 dynamic = ["version"]
 name = "slac-measurements"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.optional-dependencies]
 meme  = [

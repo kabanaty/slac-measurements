@@ -1,7 +1,5 @@
-import sys
-from types import ModuleType
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime
 
 import numpy as np
@@ -17,15 +15,7 @@ from slac_measurements.wires.collection.results import (
     WireMeasurementCollectionResult,
 )
 
-# meme is an optional dependency not installed in CI — provide a fake module
-# so that the lazy `from meme.model import Model` inside get_jitter_rmat can
-# be patched without ModuleNotFoundError.
-_meme = ModuleType("meme")
-_meme_model = ModuleType("meme.model")
-_meme_model.Model = MagicMock()
-_meme.model = _meme_model
-sys.modules.setdefault("meme", _meme)
-sys.modules.setdefault("meme.model", _meme_model)
+from conftest import mock_meme
 
 
 class ExtractBpmDataTest(TestCase):
@@ -171,6 +161,7 @@ class ComputeOrbitFitTest(TestCase):
 
 
 class GetJitterRmatTest(TestCase):
+    @mock_meme
     @patch("meme.model.Model")
     def test_extracts_correct_rmat_elements(self, mock_model_cls):
         rmat_6x6 = np.zeros((6, 6))

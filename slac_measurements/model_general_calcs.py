@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Union
 
 import numpy as np
@@ -17,13 +18,15 @@ def quad_scan_optics(
     # have live BLEM model update
     if physics_model == "BLEM":
         refresh_blem_model()
+    else:
+        time.sleep(2)
     model_live = _get_model_from_device(beam_profile_device, physics_model, use_design=False)
     rmat = model_live.get_rmat(
         from_device=magnet.name,
         to_device=beam_profile_device.name,
     )
     model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
-    twiss = model_design.get_twiss(beam_profile_device.name)
+    twiss = model_design.get_twiss(beam_profile_device.name, pos='beg')
     return {"rmat": rmat, "design_twiss": twiss}
 
 
@@ -34,6 +37,8 @@ def get_optics_after_magnet(
     # have live BLEM model update
     if physics_model == "BLEM":
         refresh_blem_model()
+    else:
+        time.sleep(2)
     model_live = _get_model_from_device(beam_profile_device, physics_model, use_design=False)
     full_rmat = model_live.get_rmat(
         from_device=magnet.name,
@@ -45,7 +50,7 @@ def get_optics_after_magnet(
     )
     after_quad_rmat = full_rmat @ np.linalg.inv(quad_rmat)
     model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
-    twiss = model_design.get_twiss(beam_profile_device.name)
+    twiss = model_design.get_twiss(beam_profile_device.name, pos='beg')
     return {"after_quad_rmat": after_quad_rmat, "design_twiss": twiss}
 
 
@@ -55,6 +60,8 @@ def multi_device_optics(
     """Get rmat and twiss from reference device to all measurement devices"""
     if physics_model == "BLEM":
         refresh_blem_model()
+    else:
+        time.sleep(2)
     model_live = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=False)
     beam_profile_device_names = [
         beam_profile_device.name for beam_profile_device in beam_profile_devices
@@ -66,7 +73,7 @@ def multi_device_optics(
         rmat.append(model_live.get_rmat(device_ref, device))
     rmat = np.array(rmat)
     model_design = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=True)
-    twiss = model_design.get_twiss(beam_profile_device_names)
+    twiss = model_design.get_twiss(device_ref)
     return {"rmat": rmat, "design_twiss": twiss}
 
 
