@@ -9,7 +9,7 @@ _LOW_CHARGE_THRESHOLD = 1e7
 def compute_charge_normalization(
     collection_result: WireMeasurementCollectionResult,
     toroid: str | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, str]:
     """Compute per-pulse charge normalization factors and validity mask.
 
     Normalizes detector signals to the mean charge level, removing
@@ -27,11 +27,12 @@ def compute_charge_normalization(
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray]
-        (normalization_factors, valid_mask):
+    tuple[np.ndarray, np.ndarray, str]
+        (normalization_factors, valid_mask, resolved_toroid):
         - normalization_factors: per-pulse scale factor (mean_charge / charge[i]).
           Set to 1.0 for invalid or NaN pulses.
         - valid_mask: boolean array, True where charge > threshold or isnan.
+        - resolved_toroid: the toroid device name actually used.
     """
     toroid_name = _resolve_toroid(collection_result, toroid)
     charge = _extract_charge_data(collection_result.raw_data, toroid_name)
@@ -43,7 +44,7 @@ def compute_charge_normalization(
 
     factors = np.where(valid_finite, mean_charge / charge, 1.0)
 
-    return factors, valid_mask
+    return factors, valid_mask, toroid_name
 
 
 def _resolve_toroid(

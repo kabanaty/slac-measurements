@@ -227,8 +227,6 @@ class BaseWireMeasurementCollection(
 
         charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
 
-        charge_toroid_names = self.beam_profile_device.metadata.charge_toroids or []
-
         def _get_buffer_collection_method(device_name: str) -> str | None:
             """Determine the buffer collection method for a given device based on its name."""
 

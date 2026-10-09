@@ -90,11 +90,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         metadata.rms_detector = effective_detector
 
         if charge_normalization:
-            self._charge_factors, self._charge_valid_mask = (
+            self._charge_factors, self._charge_valid_mask, charge_toroid = (
                 compute_charge_normalization(
                     self.collection_result, toroid=charge_toroid
                 )
             )
+        else:
+            self._charge_factors = None
+            self._charge_valid_mask = None
 
         if jitter_correction:
             self._jitter_x, self._jitter_y = compute_jitter(
@@ -472,10 +475,17 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             self.collection_result.metadata.wire_name,
         ]
         for profile, index in profile_indices.items():
-            # Apply charge validity mask to filter out low-charge pulses
             if self._charge_valid_mask is not None:
                 valid = self._charge_valid_mask[index]
                 index = index[valid]
+                if len(index) == 0:
+                    warnings.warn(
+                        f"All pulses in profile '{profile}' had insufficient "
+                        f"charge — skipping profile.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    continue
 
             detectors = {}
             positions = None

@@ -104,18 +104,19 @@ class ComputeChargeNormalizationTest(TestCase):
         raw_data = {"WS01": np.zeros(3), "IM01": charge}
         result = _make_collection_result(raw_data, charge_toroids=["IM01"])
 
-        factors, valid_mask = compute_charge_normalization(result, toroid="IM01")
+        factors, valid_mask, name = compute_charge_normalization(result, toroid="IM01")
 
         expected_mean = 4e8
         np.testing.assert_allclose(factors, expected_mean / charge)
         np.testing.assert_array_equal(valid_mask, [True, True, True])
+        self.assertEqual(name, "IM01")
 
     def test_low_charge_masked_out(self):
         charge = np.array([5e8, 1e6, 3e8])
         raw_data = {"WS01": np.zeros(3), "IM01": charge}
         result = _make_collection_result(raw_data, charge_toroids=["IM01"])
 
-        factors, valid_mask = compute_charge_normalization(result, toroid="IM01")
+        factors, valid_mask, _ = compute_charge_normalization(result, toroid="IM01")
 
         self.assertFalse(valid_mask[1])
         self.assertEqual(factors[1], 1.0)
@@ -128,7 +129,7 @@ class ComputeChargeNormalizationTest(TestCase):
         raw_data = {"WS01": np.zeros(3), "IM01": charge}
         result = _make_collection_result(raw_data, charge_toroids=["IM01"])
 
-        factors, valid_mask = compute_charge_normalization(result, toroid="IM01")
+        factors, valid_mask, _ = compute_charge_normalization(result, toroid="IM01")
 
         self.assertTrue(valid_mask[1])
         self.assertEqual(factors[1], 1.0)
@@ -145,19 +146,21 @@ class ComputeChargeNormalizationTest(TestCase):
         }
         result = _make_collection_result(raw_data, charge_toroids=["IM01", "IM02"])
 
-        factors, _ = compute_charge_normalization(result, toroid="IM02")
+        factors, _, name = compute_charge_normalization(result, toroid="IM02")
 
         expected_mean = 4e8
         np.testing.assert_allclose(factors, expected_mean / np.array([2e8, 4e8, 6e8]))
+        self.assertEqual(name, "IM02")
 
     def test_default_toroid_resolution(self):
         raw_data = {"WS01": np.zeros(3), "IM01": np.array([3e8, 3e8, 3e8])}
         result = _make_collection_result(raw_data, charge_toroids=["IM01"])
 
-        factors, valid_mask = compute_charge_normalization(result)
+        factors, valid_mask, name = compute_charge_normalization(result)
 
         np.testing.assert_allclose(factors, 1.0)
         np.testing.assert_array_equal(valid_mask, [True, True, True])
+        self.assertEqual(name, "IM01")
 
     def test_raises_when_no_toroid_data(self):
         raw_data = {"WS01": np.zeros(3)}
@@ -171,7 +174,7 @@ class ComputeChargeNormalizationTest(TestCase):
         raw_data = {"WS01": np.zeros(3), "IM01": charge}
         result = _make_collection_result(raw_data, charge_toroids=["IM01"])
 
-        factors, valid_mask = compute_charge_normalization(result, toroid="IM01")
+        factors, valid_mask, _ = compute_charge_normalization(result, toroid="IM01")
 
         np.testing.assert_array_equal(valid_mask, [False, False, False])
         np.testing.assert_array_equal(factors, [1.0, 1.0, 1.0])
@@ -187,8 +190,20 @@ class ComputeChargeNormalizationTest(TestCase):
         }
         result = _make_collection_result(raw_data, charge_toroids=["BPM2"])
 
-        factors, valid_mask = compute_charge_normalization(result, toroid="BPM2")
+        factors, valid_mask, name = compute_charge_normalization(result, toroid="BPM2")
 
         expected_mean = 4e8
         np.testing.assert_allclose(factors, expected_mean / np.array([2e8, 4e8, 6e8]))
         np.testing.assert_array_equal(valid_mask, [True, True, True])
+        self.assertEqual(name, "BPM2")
+
+    def test_returns_resolved_toroid_when_none_passed(self):
+        raw_data = {
+            "WS01": np.zeros(3),
+            "IM02": np.array([2e8, 4e8, 6e8]),
+        }
+        result = _make_collection_result(raw_data, charge_toroids=["IM01", "IM02"])
+
+        _, _, name = compute_charge_normalization(result, toroid=None)
+
+        self.assertEqual(name, "IM02")
