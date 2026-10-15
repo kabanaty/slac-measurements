@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     from slac_measurements.wires.analysis.results import load_from_h5
+    from slac_measurements.wires.analysis import mat_export
     from slac_measurements.wires.analysis.mat_export import analysis_result_to_mat
 
     h5_path = pathlib.Path(args.h5_path)
@@ -51,7 +52,12 @@ def main(argv: list[str] | None = None) -> None:
             "Name lookup from slac_db failed; using MAD names in .mat file.",
             stacklevel=2,
         )
-        saved = analysis_result_to_mat(result, mat_path, name_map={})
+        _orig_build = mat_export._build_name_map
+        mat_export._build_name_map = lambda names: {}
+        try:
+            saved = analysis_result_to_mat(result, mat_path, name_map={})
+        finally:
+            mat_export._build_name_map = _orig_build
 
     print(f"MAT_PATH:{saved}")
 
