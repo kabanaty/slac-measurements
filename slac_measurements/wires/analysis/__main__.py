@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import sys
+import warnings
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -42,7 +43,16 @@ def main(argv: list[str] | None = None) -> None:
     mat_path = args.mat_path or str(h5_path.with_suffix(".mat"))
 
     result = load_from_h5(str(h5_path))
-    saved = analysis_result_to_mat(result, mat_path)
+
+    try:
+        saved = analysis_result_to_mat(result, mat_path)
+    except Exception:
+        warnings.warn(
+            "Name lookup from slac_db failed; using MAD names in .mat file.",
+            stacklevel=2,
+        )
+        saved = analysis_result_to_mat(result, mat_path, name_map={})
+
     print(f"MAT_PATH:{saved}")
 
 
