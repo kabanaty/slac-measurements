@@ -303,7 +303,15 @@ class BaseWireMeasurementCollection(
                 f"Invalid buffer point count for timeout calculation: {n_points}"
             )
 
-        min_expected_s = n_points / self.beam_profile_device.beam_rate
+        beam_rate = self.beam_profile_device.beam_rate
+        if beam_rate is None or beam_rate <= 0:
+            raise RuntimeError(
+                f"Beam rate is {beam_rate} Hz; cannot run a wire scan without beam. "
+                "Check that beam is on and the beam rate PV is reporting a "
+                "positive rate."
+            )
+
+        min_expected_s = n_points / beam_rate
         return max(
             min_expected_s * _ACQUISITION_TIMEOUT_MARGIN,
             min_expected_s + _ACQUISITION_TIMEOUT_MIN_EXTRA_S,
