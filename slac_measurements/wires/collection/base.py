@@ -290,9 +290,30 @@ class BaseWireMeasurementCollection(
                 logger=self.logger,
                 pulses=self.beam_profile_device.scan_pulses,
                 beam_rate=self.beam_profile_device.beam_rate,
+                area=self.beam_profile_device.area,
             )
 
         return self.buffer
+
+    def _effective_beam_rate(self) -> float:
+        """Return the rate of shots the buffer records, in Hz.
+
+        This is the beam rate, capped by the buffer's rate limit (e.g. BYKIK
+        in LTUH/LTUS) when it has one.
+        """
+
+        beam_rate = self.beam_profile_device.beam_rate
+        if beam_rate is None or beam_rate <= 0:
+            raise RuntimeError(
+                f"Beam rate is {beam_rate} Hz; cannot run a wire scan without beam. "
+                "Check that beam is on and the beam rate PV is reporting a "
+                "positive rate."
+            )
+
+        rate_limit_hz = getattr(self.buffer, "rate_limit_hz", None)
+        if rate_limit_hz is None:
+            return beam_rate
+        return min(beam_rate, rate_limit_hz)
 
     def _calculate_acquisition_timeout_s(self) -> float:
         """Return timeout above minimum expected buffer acquisition time."""
@@ -303,15 +324,7 @@ class BaseWireMeasurementCollection(
                 f"Invalid buffer point count for timeout calculation: {n_points}"
             )
 
-        beam_rate = self.beam_profile_device.beam_rate
-        if beam_rate is None or beam_rate <= 0:
-            raise RuntimeError(
-                f"Beam rate is {beam_rate} Hz; cannot run a wire scan without beam. "
-                "Check that beam is on and the beam rate PV is reporting a "
-                "positive rate."
-            )
-
-        min_expected_s = n_points / beam_rate
+        min_expected_s = n_points / self._effective_beam_rate()
         return max(
             min_expected_s * _ACQUISITION_TIMEOUT_MARGIN,
             min_expected_s + _ACQUISITION_TIMEOUT_MIN_EXTRA_S,

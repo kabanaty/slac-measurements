@@ -27,9 +27,16 @@ def reserve_buffer(
     beampath: str,
     pulses: int,
     beam_rate: int,
+    area: str | None = None,
     name: str = _BUFFER_NAME,
     logger: logging.Logger | None = None,
 ) -> Buffer:
+    """Reserve a timing buffer sized for the scan.
+
+    ``area`` lets CU buffers in LTUH/LTUS apply the BYKIK rate mask. The buffer
+    is sized from the full ``beam_rate``; the point count depends mostly on
+    ``pulses``, so a lower BYKIK rate only oversizes it slightly.
+    """
     user = _get_username()
     if logger:
         logger.info("Reserving buffer...")
@@ -39,10 +46,16 @@ def reserve_buffer(
         n_measurements=_calculate_buffer_points(pulses, beam_rate),
         user=user,
         name=name,
+        area=area,
     )
 
     if logger:
         logger.info("Reserved timing buffer %s.", buf.number)
+        rate_limit_hz = getattr(buf, "rate_limit_hz", None)
+        if rate_limit_hz is not None:
+            logger.info(
+                "Timing buffer %s limited to %s Hz by BYKIK.", buf.number, rate_limit_hz
+            )
 
     return buf
 

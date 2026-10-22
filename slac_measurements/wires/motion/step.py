@@ -49,22 +49,33 @@ def get_step_positions(device):
 
 
 def move_to_step_position(
-    device, logger=logger, *, position, position_index, total_positions, positions
+    device,
+    logger=logger,
+    *,
+    position,
+    position_index,
+    total_positions,
+    positions,
+    beam_rate=None,
 ):
-    """Move wire to a step position and wait for arrival."""
+    """Move wire to a step position and wait for arrival.
+
+    ``beam_rate`` overrides ``device.beam_rate`` for the data-taking speed,
+    e.g. when the timing buffer only sees BYKIK-limited shots.
+    """
 
     def calculate_speed():
         if position_index % 2 == 0:
             return int(device.speed_max)
-        beam_rate = device.beam_rate
-        if beam_rate is None or beam_rate <= 0:
+        rate = device.beam_rate if beam_rate is None else beam_rate
+        if rate is None or rate <= 0:
             raise RuntimeError(
-                f"Beam rate is {beam_rate} Hz; cannot calculate step scan wire "
+                f"Beam rate is {rate} Hz; cannot calculate step scan wire "
                 "speed without beam. Check that beam is on and the beam rate PV "
                 "is reporting a positive rate."
             )
         position_delta = positions[position_index] - positions[position_index - 1]
-        speed = (position_delta / device.scan_pulses) * beam_rate
+        speed = (position_delta / device.scan_pulses) * rate
         return int(speed)
 
     logger.info(

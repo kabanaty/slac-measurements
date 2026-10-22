@@ -142,6 +142,23 @@ class MoveToStepPositionTest(TestCase):
             )
         self.assertIn("did not reach position", str(ctx.exception))
 
+    @patch("slac_measurements.utils.wait_until", return_value=True)
+    def test_beam_rate_override_sets_speed(self, mock_wait):
+        device = self._make_device()
+        device.beam_rate = 120
+        positions = [100, 500]
+
+        move_to_step_position(
+            device,
+            position=500,
+            position_index=1,
+            total_positions=2,
+            positions=positions,
+            beam_rate=30,
+        )
+
+        self.assertEqual(device.speed, int((400 / 350) * 30))
+
 
 class InitializeOTFWithRetryTest(TestCase):
     def _make_device(self, homed=False, on_status=False):
