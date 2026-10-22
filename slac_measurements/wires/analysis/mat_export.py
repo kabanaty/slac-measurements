@@ -392,7 +392,13 @@ def _build_beam_struct(
                     + (np.sqrt(2 * np.pi) * amp * sig_e) ** 2
                 )
                 stat_std_map[tag][0] = area_err
-                stat_std_map[tag][1] = det_fit.mean_err
+                stat_std_map[tag][1] = abs(
+                    float(
+                        stage_to_beam(
+                            np.array([det_fit.mean_err]), tag, metadata.install_angle
+                        )[0]
+                    )
+                )
                 stat_std_map[tag][2] = sig_e
 
     # statsStd = [x_mean_err, y_mean_err, x_sigma_err, y_sigma_err, xy_err, int_err]

@@ -38,6 +38,7 @@ class DetectorFit(BaseModel):
     sigma_err: float = 0.0
     mean_err: float = 0.0
     amplitude_err: float = 0.0
+    offset_err: float = 0.0
 
 
 class FitResult(BaseModel):

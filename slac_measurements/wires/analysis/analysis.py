@@ -218,7 +218,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             # Generate fit curve (in beam coordinates)
             # Build kwargs dynamically to handle different fit types
-            curve_params = {k: v for k, v in fp.items() if k != "error"}
+            curve_params = {
+                k: v for k, v in fp.items() if k != "error" and not k.endswith("_err")
+            }
             fit_curve = fitting_module.curve(x=peak_window[0], **curve_params)
 
             return DetectorFit(
@@ -229,8 +231,15 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 curve=fit_curve,
                 positions=peak_window[0],
                 sigma_err=fp.get("sigma_err", 0.0),
-                mean_err=fp.get("mean_err", 0.0),
+                mean_err=float(
+                    beam_to_stage(
+                        fp.get("mean_err", 0.0),
+                        profile,
+                        self.collection_result.metadata.install_angle,
+                    )
+                ),
                 amplitude_err=fp.get("amp_err", 0.0),
+                offset_err=fp.get("off_err", 0.0),
             )
 
         def _peak_window(
