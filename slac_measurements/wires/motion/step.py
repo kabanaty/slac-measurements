@@ -56,8 +56,15 @@ def move_to_step_position(
     def calculate_speed():
         if position_index % 2 == 0:
             return int(device.speed_max)
+        beam_rate = device.beam_rate
+        if beam_rate is None or beam_rate <= 0:
+            raise RuntimeError(
+                f"Beam rate is {beam_rate} Hz; cannot calculate step scan wire "
+                "speed without beam. Check that beam is on and the beam rate PV "
+                "is reporting a positive rate."
+            )
         position_delta = positions[position_index] - positions[position_index - 1]
-        speed = (position_delta / device.scan_pulses) * device.beam_rate
+        speed = (position_delta / device.scan_pulses) * beam_rate
         return int(speed)
 
     logger.info(
